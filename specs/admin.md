@@ -55,7 +55,7 @@ bench2/
         │   ├── processes.py         # GET /processes, POST /processes/<name>/restart
         │   ├── logs.py              # GET /logs, /logs/<filename>
         │   ├── database.py          # GET /database/binlogs, /database/slow-queries
-        │   └── commands.py          # POST /commands/run, GET /commands/stream/<token>
+        │   └── tasks.py             # GET /tasks, /tasks/<id>, POST /tasks/run, /tasks/<id>/kill
         │
         └── templates/
             ├── base.html
@@ -72,7 +72,9 @@ bench2/
             │   ├── binlogs.html
             │   ├── binlog_detail.html
             │   └── slow_queries.html
-            └── commands.html
+            └── tasks/
+                ├── list.html
+                └── detail.html
 ```
 
 ---
@@ -90,7 +92,7 @@ def create_app(bench_root: Path) -> Flask:
     app.register_blueprint(processes_bp, url_prefix='/processes')
     app.register_blueprint(logs_bp,      url_prefix='/logs')
     app.register_blueprint(database_bp,  url_prefix='/database')
-    app.register_blueprint(commands_bp,  url_prefix='/commands')
+    app.register_blueprint(tasks_bp,     url_prefix='/tasks')
 
     return app
 ```
@@ -358,35 +360,24 @@ Query parameters:
 
 Query parameter: `?limit=N` (default 50, max 500).
 
-### `POST /commands/run` — Execute a command
+### `POST /tasks/run` — Execute a command
+
+All command execution goes through the task system (see [specs/tasks.md](tasks.md)). Commands run as detached forked processes; the admin server returns immediately.
 
 Request body (form-encoded):
 ```
 command=migrate&site=site1.localhost
 ```
 
-Allowed commands and their parameters:
+Allowed commands are enforced by `TaskRunner._build_argv`. Any unknown command returns HTTP 400. On success, the response is a `303` redirect to `GET /tasks/<task-id>`.
 
-| `command` | Extra params | Runs |
-|-----------|-------------|------|
-| `migrate` | `site` | `bench --site <site> migrate` |
-| `clear-cache` | `site` | `bench --site <site> clear-cache` |
-| `install-app` | `site`, `app` | `bench --site <site> install-app <app>` |
-| `build` | — | `bench build` |
-| `update` | — | `bench update --yes` |
-| `reload-supervisor` | — | `supervisorctl -c config/supervisor.conf reload` (supervisor only) |
+### `GET /tasks` — Task list
 
-Any command not in this list returns HTTP 400.
+See [specs/tasks.md](tasks.md). Lists all tasks, most recent first, with status badges.
 
-The endpoint runs the command as a subprocess, streams stdout+stderr line-by-line via **Server-Sent Events**, and closes the stream when the process exits. The response `Content-Type` is `text/event-stream`.
+### `GET /tasks/<task-id>` — Task detail
 
-```
-GET /commands/run?command=migrate&site=site1.localhost
-```
-
-(GET is acceptable here because SSE requires a GET. The URL is not bookmarkable — navigating to it starts the command.)
-
-The commands page (`commands.html`) uses JavaScript's `EventSource` to connect to this URL and appends each line to a `<pre>` block. When the stream closes, it shows the exit code.
+See [specs/tasks.md](tasks.md). Shows task metadata, live-streaming output while running, and a kill button for running tasks.
 
 ---
 
@@ -420,7 +411,8 @@ Views catch `ConfigError`, `FileNotFoundError`, and database connection errors a
 
 - Bind to `127.0.0.1` by default.
 - `LogReader.read_tail` and `stream_tail` validate that the requested filename contains no path separators and resolves to a file inside `logs/`. Any traversal attempt returns HTTP 400.
-- The commands whitelist prevents arbitrary shell execution.
+- Command execution uses `TaskRunner._build_argv`, which only accepts whitelisted commands. No user-supplied string is passed to a shell.
+- `task_id` values are validated against `^\d{8}-\d{6}-[0-9a-f]{6}$` before being used as directory names.
 - Root MariaDB credentials come from `bench.yml` — the admin must be run by a user who can read that file.
 
 ---

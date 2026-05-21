@@ -2,6 +2,8 @@
 
 Covers DNS-based multitenancy, Nginx reverse-proxy configuration, and Let's Encrypt SSL certificate management. All settings live in `bench.yml`.
 
+> **Platform scope:** Everything in this file targets **Ubuntu/Linux servers**. Let's Encrypt requires a publicly reachable server with real DNS records. Nginx system integration (`/etc/nginx/conf.d/`, `systemctl reload nginx`) is Linux-specific. On macOS, use `bench run` with honcho for development; skip the `bench setup` commands entirely.
+
 ---
 
 ## Overview
@@ -333,7 +335,11 @@ class NginxManager:
         """Check if nginx binary is present."""
 
     def install(self) -> None:
-        """apt-get install nginx."""
+        """
+        Install nginx via the system package manager.
+        Ubuntu: apt-get install nginx
+        macOS:  brew install nginx
+        """
 
     def generate_config(self, ssl_ready: bool = False) -> None:
         """
@@ -351,7 +357,11 @@ class NginxManager:
         """
 
     def reload(self) -> None:
-        """nginx -t (test config), then systemctl reload nginx."""
+        """
+        Test config with `nginx -t`, then reload:
+        Ubuntu: systemctl reload nginx
+        macOS:  nginx -s reload  (brew services does a full restart; -s reload is faster)
+        """
 
     def cert_path(self, site: SiteConfig) -> Path:
         """
@@ -373,7 +383,13 @@ class LetsEncryptManager:
         """Check if certbot binary is present."""
 
     def install(self) -> None:
-        """apt-get install certbot."""
+        """
+        Install certbot via the system package manager.
+        Ubuntu: apt-get install certbot
+        macOS:  brew install certbot
+        Note: certbot on macOS is supported for completeness but Let's Encrypt
+        requires a publicly reachable server — not a local development machine.
+        """
 
     def ensure_webroot(self) -> None:
         """Create letsencrypt.webroot_path if it does not exist."""
@@ -499,18 +515,20 @@ Orchestrates the full production setup in the correct dependency order.
 - `nginx.enabled: true` in `bench.yml`.
 - `bench init` has been run.
 - DNS records are configured (required before `letsencrypt` step).
+- Running on a Linux server (Ubuntu). Exits with an error on macOS.
 
 **Steps:**
 
 ```
 1.  Validate bench.yml
-2.  Verify process_manager is supervisor (error if not)
-3.  Write "dns_multitenant": 1 into sites/common_site_config.json
-4.  Generate supervisor config (SupervisorProcessManager.generate_config())
-5.  Start or reload supervisord (SupervisorProcessManager.start())
-6.  SetupNginxCommand.run()
-7.  SetupLetsEncryptCommand.run()  (skipped if no sites have ssl: true)
-8.  Print summary: process status, site URLs
+2.  Verify running on Linux (error with helpful message if macOS)
+3.  Verify process_manager is supervisor (error if not)
+4.  Write "dns_multitenant": 1 into sites/common_site_config.json
+5.  Generate supervisor config (SupervisorProcessManager.generate_config())
+6.  Start or reload supervisord (SupervisorProcessManager.start())
+7.  SetupNginxCommand.run()
+8.  SetupLetsEncryptCommand.run()  (skipped if no sites have ssl: true)
+9.  Print summary: process status, site URLs
 ```
 
 ### CLI additions

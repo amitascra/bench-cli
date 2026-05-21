@@ -4,9 +4,13 @@ A command-line tool for setting up and managing [Frappe](https://frappeframework
 
 ## Requirements
 
-- Ubuntu 22.04 LTS (other Debian-based distros are best-effort)
+**Ubuntu 22.04 LTS** (other Debian-based distros are best-effort)
 - Python 3.10+
-- `sudo` access (needed during `bench init` to install system packages)
+- `sudo` access (needed during `bench init` to install system packages via apt)
+
+**macOS** (development only — production setup requires a Linux server)
+- Python 3.10+
+- [Homebrew](https://brew.sh) (`brew` in `$PATH`)
 
 ## Installation
 

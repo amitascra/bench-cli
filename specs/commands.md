@@ -24,7 +24,8 @@ Installs and configures the entire environment described in `bench.yml`. Safe to
 ### Pre-conditions
 
 - `bench.yml` exists and is valid.
-- The process has `sudo` access (required for `apt-get`).
+- **Ubuntu:** The process has `sudo` access (required for `apt-get`).
+- **macOS:** Homebrew is installed (`brew` is in `$PATH`). No `sudo` required — Homebrew installs to user-owned directories.
 
 ### Steps
 
@@ -49,16 +50,25 @@ Installs and configures the entire environment described in `bench.yml`. Safe to
 
 #### Step 2 — Install system packages
 
-`MariaDBManager.install()` and `RedisManager.install()` each check `is_installed()` first and skip if already present.
+`MariaDBManager.install()` and `RedisManager.install()` each check `is_installed()` first and skip if already present. The package manager is selected by `get_package_manager()` from `bench2.platform`.
 
-Packages installed via `apt-get`:
+**Ubuntu (apt):**
 - `mariadb-server`
 - `redis-server`
 - `python3-<version>` and `python3-<version>-venv` (from deadsnakes PPA if needed)
 - `git`
-- `libmysqlclient-dev` (required to build the `mysqlclient` Python package)
 
-After installation, `MariaDBManager.start()` ensures the service is running.
+**macOS (Homebrew):**
+- `mariadb`
+- `redis`
+- `python@<version>` (if the requested version is not already available)
+- `git` (usually pre-installed via Xcode CLT)
+
+`libmysqlclient-dev` is **not** needed on either platform — bench2 uses `PyMySQL`, which is pure Python and requires no C extension.
+
+After installation, `MariaDBManager.start()` ensures the MariaDB service is running:
+- Ubuntu: `systemctl start mariadb`
+- macOS: `brew services start mariadb`
 
 #### Step 3 — Create bench directory structure
 
@@ -318,7 +328,9 @@ See [specs/production.md](production.md) for the full step-by-step.
 
 **Summary:** Installs nginx if absent, generates per-site config files into `config/nginx/`, symlinks `include.conf` into `nginx.config_dir`, validates with `nginx -t`, and reloads nginx.
 
-Pre-conditions: `nginx.enabled: true`, `bench init` has been run, process has `sudo`.
+Pre-conditions: `nginx.enabled: true`, `bench init` has been run, process has `sudo` (Ubuntu) or Homebrew (macOS).
+
+> **macOS note:** This command works on macOS with Homebrew nginx for local testing, but its primary use case is production deployment on Ubuntu/Linux servers. The `config_dir` default (`/etc/nginx/conf.d`) does not exist on macOS — set it to `/opt/homebrew/etc/nginx/servers/` (Apple Silicon) or `/usr/local/etc/nginx/servers/` (Intel) in `bench.yml`.
 
 ---
 
@@ -330,6 +342,8 @@ See [specs/production.md](production.md) for the full step-by-step.
 
 Pre-conditions: `bench setup nginx` has run, nginx is serving port 80, DNS records for all SSL sites point to this server.
 
+> **macOS note:** Let's Encrypt certificates require a publicly reachable server with real DNS records. This command is intended for Ubuntu/Linux production servers only. Do not run it on a local macOS development machine.
+
 ---
 
 ## `bench setup production`
@@ -337,6 +351,8 @@ Pre-conditions: `bench setup nginx` has run, nginx is serving port 80, DNS recor
 See [specs/production.md](production.md) for the full step-by-step.
 
 **Summary:** Validates that `process_manager` is `supervisor`, writes `dns_multitenant: 1` to `sites/common_site_config.json`, sets up supervisor, then runs `bench setup nginx` and `bench setup letsencrypt` in sequence.
+
+> **macOS note:** Production setup targets Ubuntu/Linux servers. On macOS, use `bench run` (honcho) for development. Running `bench setup production` on macOS will print an error and exit.
 
 ---
 

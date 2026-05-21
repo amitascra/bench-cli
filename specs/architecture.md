@@ -13,6 +13,7 @@ bench2/
 └── bench2/                      # Python package
     ├── __init__.py
     ├── cli.py                   # Click entry point — wires commands to classes
+    ├── platform.py              # OS detection and system package manager abstraction
     │
     ├── config/                  # Data classes that model bench.yml
     │   ├── __init__.py
@@ -55,11 +56,18 @@ bench2/
     │       ├── letsencrypt.py   # SetupLetsEncryptCommand
     │       └── production.py    # SetupProductionCommand
     │
+    ├── tasks/                   # Task execution and tracking (see specs/tasks.md)
+    │   ├── __init__.py
+    │   ├── models.py            # TaskInfo dataclass
+    │   ├── task_runner.py       # TaskRunner — forks child, writes task directory
+    │   ├── task_reader.py       # TaskReader — reads task directory (stateless)
+    │   └── wrapper.py           # entry point for the forked child (stdlib only)
+    │
     └── admin/                   # Flask admin interface (see specs/admin.md)
         ├── __init__.py
         ├── app.py               # create_app(bench_root) factory
         ├── readers/             # Stateless filesystem/DB readers
-        └── views/               # Flask blueprints
+        └── views/               # Flask blueprints (tasks.py replaces commands.py)
 ```
 
 ---
@@ -93,8 +101,14 @@ bench2/
 │       ├── include.conf    # single include directive — symlinked into nginx config_dir
 │       ├── site1.example.com.conf
 │       └── site2.example.com.conf
-└── pids/                   # PID files and supervisor socket
-    └── supervisor.sock     # supervisor-only: unix socket for supervisorctl
+├── pids/                   # PID files and supervisor socket
+│   └── supervisor.sock     # supervisor-only: unix socket for supervisorctl
+└── tasks/                  # one sub-directory per admin-triggered task
+    └── 20250521-143022-a1b2c3/
+        ├── meta.json       # command, args, started_at, finished_at, exit_code
+        ├── pid             # integer PID of the forked child
+        ├── output.log      # combined stdout + stderr
+        └── status          # running | success | failed | killed
 ```
 
 ---
@@ -288,14 +302,22 @@ class MariaDBManager:
     def __init__(self, config: MariaDBConfig): ...
 
     def install(self) -> None:
-        """apt-get install mariadb-server if not already installed."""
+        """
+        Install MariaDB via the system package manager.
+        Ubuntu: apt-get install mariadb-server
+        macOS:  brew install mariadb
+        """
 
     def is_installed(self) -> bool: ...
 
     def is_running(self) -> bool: ...
 
     def start(self) -> None:
-        """systemctl start mariadb."""
+        """
+        Start the MariaDB service.
+        Ubuntu: systemctl start mariadb
+        macOS:  brew services start mariadb
+        """
 
     def create_database(self, db_name: str) -> None:
         """CREATE DATABASE IF NOT EXISTS."""
@@ -314,7 +336,13 @@ class RedisManager:
     def __init__(self, config: RedisConfig, bench: Bench): ...
 
     def install(self) -> None:
-        """apt-get install redis-server if not already installed."""
+        """
+        Install Redis via the system package manager.
+        Ubuntu: apt-get install redis-server
+        macOS:  brew install redis
+        Redis is not started as a system service; bench run launches it
+        directly from the Procfile/supervisor config with a custom port.
+        """
 
     def is_installed(self) -> bool: ...
 
@@ -337,7 +365,9 @@ class PythonEnvManager:
     def ensure_python(self) -> None:
         """
         Check that the configured Python version is available.
-        If not, attempt to install via deadsnakes PPA (Ubuntu only).
+        Ubuntu: install via the deadsnakes PPA (python3-<version>-venv).
+        macOS:  install via Homebrew (brew install python@<version>).
+               Prints a hint to use pyenv if the version is unavailable via brew.
         """
 
     def create_venv(self) -> None:
@@ -347,7 +377,12 @@ class PythonEnvManager:
         """pip install -e app.path using bench.pip."""
 
     def install_node(self) -> None:
-        """Install Node.js via NodeSource if not present (required for asset builds)."""
+        """
+        Install Node.js 18 LTS if not present (required for asset builds).
+        Ubuntu: download and run the NodeSource setup script, then apt-get install nodejs.
+        macOS:  brew install node.
+        Yarn is installed globally afterward via: npm install -g yarn.
+        """
 ```
 
 ### `ProcessManager` (abstract base)
@@ -585,6 +620,63 @@ def setup_production(): ...      # SetupProductionCommand(bench).run()
 
 ---
 
+## Platform detection (`bench2/platform.py`)
+
+All OS-specific branching lives in one module. Every other module imports from here rather than calling `platform.system()` or `shutil.which()` inline.
+
+```python
+from enum import Enum
+
+class Platform(Enum):
+    LINUX = 'linux'
+    MACOS = 'macos'
+
+def detect() -> Platform:
+    """Return Platform.MACOS on Darwin, Platform.LINUX otherwise."""
+
+def is_macos() -> bool: ...
+def is_linux() -> bool: ...
+```
+
+### `SystemPackageManager` — abstract base
+
+```python
+class SystemPackageManager(ABC):
+    @abstractmethod
+    def install(self, *packages: str) -> None:
+        """Install one or more system packages."""
+
+    @abstractmethod
+    def is_installed(self, package: str) -> bool:
+        """Return True if the package is already installed."""
+```
+
+#### `AptPackageManager`
+
+Used on Ubuntu/Debian. Calls `sudo apt-get install -y <packages>`.
+
+```python
+class AptPackageManager(SystemPackageManager):
+    def install(self, *packages: str) -> None: ...    # sudo apt-get install -y
+    def is_installed(self, package: str) -> bool: ... # dpkg -l <package>
+```
+
+#### `BrewPackageManager`
+
+Used on macOS. Requires Homebrew to be present (`brew` in `$PATH`).
+
+```python
+class BrewPackageManager(SystemPackageManager):
+    def install(self, *packages: str) -> None: ...    # brew install
+    def is_installed(self, package: str) -> bool: ... # brew list <package>
+```
+
+#### `get_package_manager() -> SystemPackageManager`
+
+Factory function — returns `BrewPackageManager()` on macOS, `AptPackageManager()` on Linux. Called once per command run, not per method call.
+
+---
+
 ## Error handling
 
 - All config errors raise `bench2.exceptions.ConfigError`.
@@ -607,4 +699,6 @@ def setup_production(): ...      # SetupProductionCommand(bench).run()
 
 All are pure Python and declared in `setup.py`. No system packages are required to install bench2 itself.
 
-`bench setup nginx` and `bench setup letsencrypt` additionally install the `nginx` and `certbot` system packages via `apt-get` if not already present. These are managed by their respective managers, not declared as Python dependencies.
+`bench setup nginx` and `bench setup letsencrypt` additionally install the `nginx` and `certbot` system packages if not already present (via apt on Ubuntu, via Homebrew on macOS). These are managed by their respective managers, not declared as Python dependencies.
+
+**Production setup (`bench setup nginx`, `bench setup letsencrypt`, `bench setup production`) targets Ubuntu/Linux servers.** macOS is a development platform; run `bench run` with honcho there instead.
