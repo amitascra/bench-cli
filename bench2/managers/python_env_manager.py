@@ -67,7 +67,7 @@ class PythonEnvManager:
 
     def _install_node_linux(self) -> None:
         run_command(
-            ["bash", "-c", "curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -"],
+            ["bash", "-c", "curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -"],
             stream_output=True,
         )
         run_command(["sudo", "apt-get", "install", "-y", "nodejs"], stream_output=True)

@@ -109,7 +109,7 @@ For each `App` in order:
 
 #### Step 7 — Install Node.js
 
-`PythonEnvManager.install_node()` checks if `node` is present. If not, installs Node.js 18 LTS via the NodeSource setup script.
+`PythonEnvManager.install_node()` checks if `node` is present. If not, installs Node.js 24 via the NodeSource setup script.
 
 Yarn is installed globally afterward: `npm install -g yarn`.
 
