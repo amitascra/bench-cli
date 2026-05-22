@@ -573,7 +573,7 @@ Renders the content of each generated `config/nginx/<site>.conf` as a syntax-hig
 ```yaml
 bench:
   name: prod-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: supervisor
 
 apps:

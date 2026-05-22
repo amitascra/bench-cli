@@ -10,7 +10,7 @@
 # ── Bench identity ────────────────────────────────────────────────────────────
 bench:
   name: my-bench            # used in process names and log prefixes
-  python: "3.11"            # Python version to use for the virtualenv
+  python: "3.14"            # Python version to use for the virtualenv
   process_manager: honcho   # honcho (dev, foreground) | supervisor (production, daemon)
 
 # ── Apps to clone and install ─────────────────────────────────────────────────
@@ -74,7 +74,7 @@ letsencrypt:
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `name` | string | yes | — | Human-readable bench name. Used in process labels and log file names. |
-| `python` | string | yes | — | Python version string (e.g. `"3.11"`). Must be available on the system or installable via `deadsnakes/ppa`. |
+| `python` | string | yes | — | Python version string (e.g. `"3.14"`). Must be available on the system or installable via `deadsnakes/ppa`. |
 | `process_manager` | string | no | `honcho` | Process manager to use. `honcho` runs processes in the foreground (development). `supervisor` runs them as a background daemon managed by supervisord (production). |
 
 ### `apps[]`
@@ -182,7 +182,7 @@ bench2 validates `bench.yml` before executing any command. Violations produce a 
 ```yaml
 bench:
   name: dev
-  python: "3.11"
+  python: "3.14"
 
 apps:
   - name: frappe

@@ -12,7 +12,7 @@ from bench2.managers.nginx_manager import NginxManager
 _BASE_YAML = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:
@@ -39,7 +39,7 @@ redis:
 _SSL_YAML = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:

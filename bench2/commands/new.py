@@ -7,7 +7,7 @@ from bench2.exceptions import BenchError
 _BENCH_YML_TEMPLATE = """\
 bench:
   name: my-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:

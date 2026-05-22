@@ -74,7 +74,7 @@ A minimal config for a single Frappe site:
 ```yaml
 bench:
   name: my-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
   http_port: 8000
   socketio_port: 9000
@@ -137,7 +137,7 @@ Update `bench.yml` to enable nginx, SSL, and supervisor:
 ```yaml
 bench:
   name: prod-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: supervisor
 
 apps:

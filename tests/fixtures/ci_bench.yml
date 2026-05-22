@@ -1,6 +1,6 @@
 bench:
   name: ci-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
   http_port: 8000
   socketio_port: 9000

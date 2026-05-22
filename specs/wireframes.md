@@ -35,7 +35,7 @@ Nav items are plain links. The bench name is shown in the header. The green "run
 └──────────┴──────────┴──────────┴──────────┴──────────┴──────────────────┘
 
   ┌─ Bench ───────────────────────────────────────────────────────────────┐
-  │  name: my-bench          python: 3.11       manager: honcho           │
+  │  name: my-bench          python: 3.14       manager: honcho           │
   │  apps: 2                 sites:  1                                    │
   └───────────────────────────────────────────────────────────────────────┘
 

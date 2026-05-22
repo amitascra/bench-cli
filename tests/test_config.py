@@ -19,7 +19,7 @@ def load_from_string(yaml_string: str) -> BenchConfig:
 MINIMAL_VALID_YAML = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:
@@ -46,7 +46,7 @@ def test_load_minimal_config() -> None:
     config = BenchConfig.from_file(FIXTURES_DIR / "minimal.yml")
 
     assert config.name == "test-bench"
-    assert config.python_version == "3.11"
+    assert config.python_version == "3.14"
     assert config.process_manager == "honcho"
 
     assert len(config.apps) == 1
@@ -108,7 +108,7 @@ def test_app_by_name_not_found() -> None:
 def test_rule_1_required_fields_bench_name_missing() -> None:
     yaml_string = """\
 bench:
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:
@@ -140,7 +140,7 @@ def test_rule_1_required_fields_no_apps() -> None:
     yaml_string = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps: []
@@ -169,7 +169,7 @@ def test_rule_1_required_fields_no_sites() -> None:
     yaml_string = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
 
 apps:
   - name: frappe
@@ -209,7 +209,7 @@ def test_rule_4_duplicate_app_names() -> None:
     yaml_string = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:
@@ -244,7 +244,7 @@ def test_rule_5_duplicate_site_names() -> None:
     yaml_string = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:
@@ -281,7 +281,7 @@ def test_rule_6_site_app_references_unknown_app() -> None:
     yaml_string = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:
@@ -314,7 +314,7 @@ def test_rule_7_site_apps_must_start_with_framework() -> None:
     yaml_string = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:
@@ -376,7 +376,7 @@ def test_rule_10_ssl_requires_nginx_enabled_and_email() -> None:
     yaml_string = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:
@@ -419,7 +419,7 @@ def test_rule_12_invalid_domain_with_space() -> None:
     yaml_string = """\
 bench:
   name: test-bench
-  python: "3.11"
+  python: "3.14"
   process_manager: honcho
 
 apps:

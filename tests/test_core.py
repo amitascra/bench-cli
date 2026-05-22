@@ -22,7 +22,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 def make_bench(tmp_path: Path, process_manager: str = "honcho") -> Bench:
     config = BenchConfig(
         name="test-bench",
-        python_version="3.11",
+        python_version="3.14",
         process_manager=process_manager,
         apps=[
             AppConfig(name="frappe", repo="https://github.com/frappe/frappe", branch="version-15"),
