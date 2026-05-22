@@ -9,9 +9,9 @@ apps:
   - name: frappe
     repo: https://github.com/frappe/frappe
     branch: version-15
-  - name: payments
-    repo: https://github.com/frappe/payments
-    branch: version-15
+  - name: blog
+    repo: https://github.com/frappe/blog
+    branch: develop
 
 sites:
   - name: site1.localhost
@@ -22,7 +22,7 @@ sites:
     admin_password: "admin"
     apps:
       - frappe
-      - payments
+      - blog
 
 mariadb:
   host: localhost
