@@ -17,6 +17,7 @@ _WHITELIST: dict[str, list[str]] = {
     "migrate": ["site"],
     "clear-cache": ["site"],
     "install-app": ["site", "app"],
+    "get-app": ["name", "repo"],
     "build": [],
     "update": [],
     "reload-supervisor": [],
@@ -94,6 +95,12 @@ class TaskRunner:
             return [bench_bin, "--site", args["site"], "clear-cache"]
         if command == "install-app":
             return [bench_bin, "--site", args["site"], "install-app", args["app"]]
+        if command == "get-app":
+            argv = [sys.executable, "-m", "bench_cli.tasks.get_app_task",
+                    str(self._bench_root), args["name"], args["repo"]]
+            if args.get("branch"):
+                argv += ["--branch", args["branch"]]
+            return argv
         if command == "build":
             return [bench_bin, "build"]
         if command == "update":
