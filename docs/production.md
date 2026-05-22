@@ -579,10 +579,10 @@ bench:
 apps:
   - name: frappe
     repo: https://github.com/frappe/frappe
-    branch: version-15
+    branch: version-16
   - name: erpnext
     repo: https://github.com/frappe/erpnext
-    branch: version-15
+    branch: version-16
 
 sites:
   - name: acme.example.com

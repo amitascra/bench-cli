@@ -17,17 +17,16 @@ bench:
 apps:
   - name: frappe            # must be a valid Python package name
     repo: https://github.com/frappe/frappe
-    branch: version-15
+    branch: version-16
 
   - name: erpnext
     repo: https://github.com/frappe/erpnext
-    branch: version-15
+    branch: version-16
 
 # ── Sites ─────────────────────────────────────────────────────────────────────
 sites:
   - name: site1.localhost
-    db_name: site1_db       # MariaDB database name
-    db_password: "secret"   # MariaDB user password for this site
+    admin_password: "admin" # Frappe administrator password for this site
     apps:                   # apps to install on this site, in order
       - frappe
       - erpnext
@@ -83,7 +82,7 @@ Each entry describes a git repository to clone into `apps/`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | yes | Directory name under `apps/` and the Python package name used for `pip install -e`. |
+| `name` | string | yes | Directory name under `apps/` and the Python package name used for `uv pip install -e`. |
 | `repo` | string | yes | Git remote URL (HTTPS or SSH). |
 | `branch` | string | yes | Branch to checkout. |
 
@@ -96,14 +95,15 @@ Each entry describes a git repository to clone into `apps/`.
 
 Each entry describes a Frappe site to create under `sites/`.
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | yes | Site directory name and the hostname used to access the site. |
-| `db_name` | string | yes | MariaDB database to create for this site. |
-| `db_password` | string | yes | Password for the MariaDB user created for this site. The username equals `db_name`. |
-| `apps[]` | list of strings | yes | App names to install, in order. Must all appear in the top-level `apps` list. `frappe` (or the first app) must be listed first. |
-| `domains[]` | list of strings | no | Additional public hostnames that serve this site. Included in the Nginx `server_name` directive and as SANs on the SSL certificate. |
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | yes | — | Site directory name and the hostname used to access the site. |
+| `admin_password` | string | no | `"admin"` | Frappe administrator password set during `new-site`. |
+| `apps[]` | list of strings | yes | — | App names to install, in order. Must all appear in the top-level `apps` list. `frappe` (or the first app) must be listed first. |
+| `domains[]` | list of strings | no | `[]` | Additional public hostnames that serve this site. Included in the Nginx `server_name` directive and as SANs on the SSL certificate. |
 | `ssl` | bool | no | `false` | When `true`, Nginx terminates TLS using a Let's Encrypt certificate covering `name` and all `domains`. |
+
+> **Note:** MariaDB database name and credentials are generated automatically by frappe's `new-site` and written into `sites/<name>/site_config.json`. You do not configure them in `bench.yml`.
 
 **Constraints:**
 - `name` values must be unique.
@@ -187,12 +187,10 @@ bench:
 apps:
   - name: frappe
     repo: https://github.com/frappe/frappe
-    branch: version-15
+    branch: version-16
 
 sites:
   - name: site1.localhost
-    db_name: site1_db
-    db_password: "secret"
     apps:
       - frappe
 

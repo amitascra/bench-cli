@@ -37,11 +37,10 @@ Installs and configures the entire environment described in `bench.yml`. Safe to
 5.  Clone apps
 6.  Install Python dependencies
 7.  Install Node.js
-8.  Configure MariaDB
-9.  Configure Redis
-10. Create sites
-11. Install apps on sites
-12. Generate Procfile
+8.  Configure Redis
+9.  Create sites
+10. Install apps on sites
+11. Generate Procfile
 ```
 
 #### Step 1 — Validate bench.yml
@@ -104,9 +103,9 @@ For each `AppConfig` in order:
 For each `App` in order:
 - `PythonEnvManager.install_app(app)` runs:
   ```
-  env/bin/pip install -e apps/<name>
+  uv pip install -e apps/<name>
   ```
-- This installs the app and all its `requirements.txt` dependencies.
+- This installs the app and all its `requirements.txt` dependencies. `uv` is used instead of pip for speed.
 
 #### Step 7 — Install Node.js
 
@@ -114,13 +113,7 @@ For each `App` in order:
 
 Yarn is installed globally afterward: `npm install -g yarn`.
 
-#### Step 8 — Configure MariaDB
-
-For each `SiteConfig`:
-- `MariaDBManager.create_database(site.db_name)` — `CREATE DATABASE IF NOT EXISTS`.
-- `MariaDBManager.create_user(site.db_name, site.db_password, site.db_name)` — creates a user with the same name as the database and grants it full access to that database.
-
-#### Step 9 — Configure Redis
+#### Step 8 — Configure Redis
 
 `RedisManager.generate_configs()` writes three files to `config/`:
 
@@ -145,21 +138,22 @@ bind 127.0.0.1
 
 Existing files are overwritten.
 
-#### Step 10 — Create sites
+#### Step 9 — Create sites
 
 For each `SiteConfig`, if `Site.exists` is `False`:
 - `Site.create(mariadb_config)` runs the framework app's `new-site` command:
   ```
   env/bin/bench new-site <site.name>
       --mariadb-root-password <root_password>
-      --db-name <site.db_name>
-      --db-password <site.db_password>
+      --admin-password <site.admin_password>
       --no-mariadb-socket
   ```
 
+frappe generates and manages the database name and credentials internally; they are written into `sites/<name>/site_config.json`. Do not pass `--db-name` or `--db-password`.
+
 Skipped if the site directory already contains `site_config.json`.
 
-#### Step 11 — Install apps on sites
+#### Step 10 — Install apps on sites
 
 For each `SiteConfig`, for each app in `site.apps` (in order):
 - `Site.install_app(app_name)` runs:
@@ -168,14 +162,14 @@ For each `SiteConfig`, for each app in `site.apps` (in order):
   ```
 - `frappe` is always already installed by `new-site`; skip it to avoid a harmless but confusing error.
 
-#### Step 12 — Generate process manager config
+#### Step 11 — Generate process manager config
 
 `ProcessManagerFactory.create(bench)` returns the right manager based on `bench.config.process_manager`, then `generate_config()` is called.
 
 **When `process_manager: honcho`** — writes `config/Procfile`:
 
 ```
-web: env/bin/gunicorn -b 0.0.0.0:8000 -w 1 -t 120 frappe.app:application
+web: bench frappe serve --port 8000 --noreload
 socketio: node apps/frappe/socketio.js
 worker_default_1: env/bin/bench worker --queue default
 worker_default_2: env/bin/bench worker --queue default
@@ -289,7 +283,7 @@ Pulls the latest commits for all apps, reinstalls Python packages, and migrates 
 1.  Validate bench.yml
 2.  Warn if processes are running
 3.  For each app: git pull
-4.  For each app: pip install -e
+4.  For each app: uv pip install -e
 5.  For each site: bench migrate
 ```
 
@@ -307,9 +301,9 @@ git -C apps/<name> merge --ff-only origin/<branch>
 
 Fast-forward only. If a merge conflict would occur, print an error for that app and skip it (continue with remaining apps).
 
-#### Step 4 — pip install -e for each app
+#### Step 4 — uv pip install -e for each app
 
-`PythonEnvManager.install_app(app)` re-runs `pip install -e apps/<name>` to pick up any new Python dependencies added to the app since the last update.
+`PythonEnvManager.install_app(app)` re-runs `uv pip install -e apps/<name>` to pick up any new Python dependencies added to the app since the last update.
 
 #### Step 5 — bench migrate for each site
 
@@ -322,9 +316,55 @@ Runs in order for each site. If migration fails on one site, print the error and
 
 ---
 
+## `bench start-admin`
+
+Starts the admin web interface as a background daemon.
+
+```bash
+bench2 start-admin              # default port 8002
+bench2 start-admin --port 9000  # custom port
+```
+
+**Steps:**
+1. Check `pids/admin.pid` — if the process is already alive, print its URL and exit.
+2. Spawn `bench2.admin.server` as a detached subprocess (`start_new_session=True`).
+3. Write `pids/admin.pid` and `pids/admin.port`.
+4. Print the admin URL.
+
+The admin server includes a watchdog that sends `SIGTERM` to itself after **15 minutes of inactivity**. Use `bench2 stop-admin` to stop it immediately.
+
+---
+
+## `bench stop-admin`
+
+Stops the background admin daemon.
+
+**Steps:**
+1. Read `pids/admin.pid`. If it does not exist, print "Admin is not running." and exit.
+2. Send `SIGTERM` to the process.
+3. Remove `pids/admin.pid` and `pids/admin.port`.
+
+Handles stale PID files gracefully — if the process has already exited (e.g. after the inactivity timeout), it still cleans up the state files.
+
+---
+
+## `bench admin`
+
+Starts the admin web interface in the **foreground** (development use). Press `Ctrl-C` to stop.
+
+```bash
+bench2 admin                    # default port 8001
+bench2 admin --port 9000        # custom port
+bench2 admin --host 0.0.0.0     # expose to the network
+```
+
+See [docs/admin.md](admin.md) for the full interface specification.
+
+---
+
 ## `bench setup nginx`
 
-See [specs/production.md](production.md) for the full step-by-step.
+See [docs/production.md](production.md) for the full step-by-step.
 
 **Summary:** Installs nginx if absent, generates per-site config files into `config/nginx/`, symlinks `include.conf` into `nginx.config_dir`, validates with `nginx -t`, and reloads nginx.
 
@@ -336,7 +376,7 @@ Pre-conditions: `nginx.enabled: true`, `bench init` has been run, process has `s
 
 ## `bench setup letsencrypt`
 
-See [specs/production.md](production.md) for the full step-by-step.
+See [docs/production.md](production.md) for the full step-by-step.
 
 **Summary:** Installs certbot if absent, ensures the webroot directory exists, runs `certbot certonly --webroot` for each `ssl: true` site (with all domains as `-d` arguments), then regenerates nginx config with HTTPS blocks and reloads nginx.
 
@@ -348,7 +388,7 @@ Pre-conditions: `bench setup nginx` has run, nginx is serving port 80, DNS recor
 
 ## `bench setup production`
 
-See [specs/production.md](production.md) for the full step-by-step.
+See [docs/production.md](production.md) for the full step-by-step.
 
 **Summary:** Validates that `process_manager` is `supervisor`, writes `dns_multitenant: 1` to `sites/common_site_config.json`, sets up supervisor, then runs `bench setup nginx` and `bench setup letsencrypt` in sequence.
 

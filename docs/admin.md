@@ -1,6 +1,6 @@
 # Admin Interface Specification
 
-bench2 ships a lightweight web-based admin interface built on Flask with no Python dependencies beyond Flask itself. It is started with `bench admin` and intended for local inspection and day-to-day operations.
+bench2 ships a lightweight web-based admin interface built on Flask with no Python dependencies beyond Flask itself. It is started as a background daemon with `bench2 start-admin` and intended for local inspection and day-to-day operations.
 
 ---
 
@@ -16,15 +16,19 @@ bench2 ships a lightweight web-based admin interface built on Flask with no Pyth
 ## Starting the admin
 
 ```bash
-bench admin               # start on default port 8001
-bench admin --port 9000   # custom port
-bench admin --host 0.0.0.0  # expose to the network (your responsibility)
+bench2 start-admin              # start daemon on default port 8002
+bench2 start-admin --port 9000  # custom port
+bench2 stop-admin               # stop the daemon
 ```
 
-The admin can also be included in the Procfile/supervisor config so it starts alongside the bench:
+The daemon auto-stops after **15 minutes of inactivity** — a background watchdog thread fires `SIGTERM` if no HTTP request arrives within the timeout window. State is tracked in `pids/admin.pid` and `pids/admin.port`.
 
-```
-admin: bench admin --port 8001
+For interactive foreground use during development:
+
+```bash
+bench2 admin               # start on default port 8001, Ctrl-C to stop
+bench2 admin --port 9000   # custom port
+bench2 admin --host 0.0.0.0  # expose to the network (your responsibility)
 ```
 
 ---
@@ -37,6 +41,7 @@ bench2/
     └── admin/
         ├── __init__.py
         ├── app.py                   # Flask app factory — create_app(bench_root: Path)
+        ├── server.py                # daemon entry point — inactivity watchdog + app.run()
         │
         ├── readers/                 # Stateless filesystem/DB readers
         │   ├── __init__.py
@@ -417,19 +422,12 @@ Views catch `ConfigError`, `FileNotFoundError`, and database connection errors a
 
 ---
 
-## CLI command additions
+## CLI commands
 
-Two additions to `bench2/cli.py`:
+Three commands in `bench2/cli.py`:
 
-```python
-@cli.command()
-@click.option('--port', default=8001, help='Port to listen on')
-@click.option('--host', default='127.0.0.1', help='Host to bind to')
-def admin(port: int, host: str):
-    """Start the admin web interface."""
-    from bench2.admin.app import create_app
-    app = create_app(bench_root=Path.cwd())
-    app.run(host=host, port=port)
-```
+- **`bench2 start-admin [--port 8002]`** — spawns `bench2.admin.server` as a detached subprocess, writes `pids/admin.pid` and `pids/admin.port`, prints the URL.
+- **`bench2 stop-admin`** — sends `SIGTERM` to the PID in `pids/admin.pid`, cleans up state files.
+- **`bench2 admin [--port 8001] [--host 127.0.0.1]`** — foreground mode, blocks until `Ctrl-C`.
 
-The admin is also listed as an optional entry in the generated Procfile/supervisor config (see commands.md — `bench init` step 12). It is commented out by default so it only starts when the user explicitly opts in.
+The daemon entry point (`bench2/admin/server.py`) runs `create_app()`, registers a `@app.before_request` hook that updates a module-level timestamp, starts a daemon watchdog thread that polls every 60 seconds, and calls `app.run()`.

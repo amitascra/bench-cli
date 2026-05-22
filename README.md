@@ -41,9 +41,9 @@ bench2 init
 
 This will:
 - Install MariaDB, Redis, Node.js via `apt` (or `brew` on macOS)
-- Create a Python virtualenv at `env/`
-- Clone your apps into `apps/` and `pip install -e` each one
-- Create your sites (database and fixtures handled by frappe)
+- Create a Python virtualenv at `env/` using `uv`
+- Clone your apps into `apps/` and install each one with `uv pip install -e`
+- Create your sites (database credentials are generated and managed by frappe)
 - Build JavaScript and CSS assets
 - Generate a `Procfile` for running all processes
 
@@ -82,7 +82,7 @@ bench:
 apps:
   - name: frappe
     repo: https://github.com/frappe/frappe
-    branch: version-15
+    branch: version-16
 
 sites:
   - name: site1.localhost
@@ -121,7 +121,9 @@ workers:
 | `bench2 stop` | Stop a running bench (works across terminal sessions via PID file) |
 | `bench2 build` | Rebuild JavaScript and CSS assets |
 | `bench2 update` | Pull latest app commits, reinstall packages, migrate all sites |
-| `bench2 admin` | Start the web admin interface (default: `http://localhost:8001`) |
+| `bench2 start-admin` | Start the admin UI as a background daemon (default: `http://localhost:8002`) |
+| `bench2 stop-admin` | Stop the background admin UI |
+| `bench2 admin` | Start the admin UI in the foreground (dev use) |
 | `bench2 setup nginx` | Generate and install nginx config |
 | `bench2 setup letsencrypt` | Obtain SSL certificates |
 | `bench2 setup production` | Full production setup (nginx + supervisor + SSL) |
@@ -143,7 +145,7 @@ bench:
 apps:
   - name: frappe
     repo: https://github.com/frappe/frappe
-    branch: version-15
+    branch: version-16
 
 sites:
   - name: mysite.example.com
@@ -179,10 +181,20 @@ This installs nginx, obtains a Let's Encrypt certificate, and starts all process
 ## Web admin
 
 ```bash
-bench2 admin
+bench2 start-admin          # start on default port 8002 (background daemon)
+bench2 stop-admin           # stop the daemon
+bench2 start-admin --port 9000  # custom port
 ```
 
-Opens a local web interface at `http://localhost:8001` for inspecting the bench without touching the terminal:
+The admin starts as a background daemon and auto-stops after **15 minutes of inactivity** — so you don't accidentally leave it running. Use `bench2 stop-admin` to stop it immediately.
+
+For interactive/foreground use during development:
+
+```bash
+bench2 admin                # foreground, Ctrl-C to stop
+```
+
+The admin interface provides:
 
 - App git status and installed versions
 - Site configuration and installed apps
@@ -212,7 +224,7 @@ my-bench/
 │       └── site_config.json     # db credentials (set by frappe)
 ├── env/               # shared Python virtualenv
 ├── logs/              # per-process log files
-├── pids/              # bench.pid for bench2 stop
+├── pids/              # bench.pid, admin.pid, admin.port
 └── config/            # Procfile, Redis configs, Nginx configs
 ```
 
@@ -220,8 +232,8 @@ my-bench/
 
 ## Further reading
 
-- [specs/config.md](specs/config.md) — complete `bench.yml` field reference
-- [specs/commands.md](specs/commands.md) — what each command does, step by step
-- [specs/production.md](specs/production.md) — nginx, Let's Encrypt, and DNS multitenancy
-- [specs/admin.md](specs/admin.md) — admin interface design
-- [specs/architecture.md](specs/architecture.md) — Python package layout and class design
+- [docs/config.md](docs/config.md) — complete `bench.yml` field reference
+- [docs/commands.md](docs/commands.md) — what each command does, step by step
+- [docs/production.md](docs/production.md) — nginx, Let's Encrypt, and DNS multitenancy
+- [docs/admin.md](docs/admin.md) — admin interface design
+- [docs/architecture.md](docs/architecture.md) — Python package layout and class design
