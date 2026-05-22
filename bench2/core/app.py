@@ -32,9 +32,6 @@ class App:
             str(self.path),
         ], stream_output=True)
 
-    def install(self) -> None:
-        run_command([str(self.bench.pip), "install", "-e", str(self.path)])
-
     def update(self) -> None:
         run_command(["git", "-C", str(self.path), "fetch", "origin"])
         run_command([

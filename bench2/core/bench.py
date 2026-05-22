@@ -44,10 +44,6 @@ class Bench:
     def python(self) -> Path:
         return self.env_path / "bin" / "python"
 
-    @property
-    def pip(self) -> Path:
-        return self.env_path / "bin" / "pip"
-
     def apps(self) -> List["App"]:
         from bench2.core.app import App
         return [App(app_config, self) for app_config in self.config.apps]

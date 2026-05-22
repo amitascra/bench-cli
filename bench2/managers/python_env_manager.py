@@ -3,7 +3,7 @@ from __future__ import annotations
 import shutil
 from typing import TYPE_CHECKING
 
-from bench2.platform import get_package_manager, is_macos, is_linux
+from bench2.platform import is_macos
 from bench2.utils import run_command
 
 if TYPE_CHECKING:
@@ -17,18 +17,13 @@ class PythonEnvManager:
 
     def ensure_python(self) -> None:
         version = self.bench.config.python_version
-        if shutil.which(f"python{version}"):
-            return
-        if is_macos():
-            run_command(["brew", "install", f"python@{version}"])
-        else:
-            self._install_python_linux(version)
+        run_command(["uv", "python", "install", version])
 
     def create_venv(self) -> None:
         if self.bench.python.exists():
             return
         version = self.bench.config.python_version
-        run_command([f"python{version}", "-m", "venv", str(self.bench.env_path)])
+        run_command(["uv", "venv", str(self.bench.env_path), "--python", version])
 
     def generate_bench_script(self) -> None:
         python_path = self.bench.env_path / "bin" / "python"
@@ -43,7 +38,11 @@ class PythonEnvManager:
         bench_script.chmod(0o755)
 
     def install_app(self, app: "App") -> None:
-        run_command([str(self.bench.pip), "install", "-e", str(app.path)], stream_output=True)
+        run_command([
+            "uv", "pip", "install",
+            "--python", str(self.bench.env_path / "bin" / "python"),
+            "-e", str(app.path),
+        ], stream_output=True)
 
     def install_node(self) -> None:
         if shutil.which("node"):
@@ -65,12 +64,6 @@ class PythonEnvManager:
     def build_assets(self) -> None:
         bench_binary = str(self.bench.env_path / "bin" / "bench")
         run_command([bench_binary, "frappe", "build", "--force"], cwd=self.bench.sites_path, stream_output=True)
-
-    def _install_python_linux(self, version: str) -> None:
-        package_manager = get_package_manager()
-        run_command(["sudo", "add-apt-repository", "-y", "ppa:deadsnakes/ppa"], stream_output=True)
-        run_command(["sudo", "apt-get", "update", "-y"], stream_output=True)
-        package_manager.install(f"python{version}", f"python{version}-venv")
 
     def _install_node_linux(self) -> None:
         run_command(

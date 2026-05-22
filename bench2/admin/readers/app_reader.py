@@ -84,8 +84,9 @@ class AppReader:
         return bool(result.stdout.strip()) if result.returncode == 0 else False
 
     def _pip_version(self, name: str) -> str:
+        python_bin = self._bench_root / "env" / "bin" / "python"
         result = subprocess.run(
-            ["pip", "show", name],
+            ["uv", "pip", "show", "--python", str(python_bin), name],
             capture_output=True,
             text=True,
         )
