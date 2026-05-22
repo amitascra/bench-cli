@@ -50,6 +50,13 @@ jobs:
           test -f /tmp/ci-bench/sites/site1.localhost/site_config.json
           test -f /tmp/ci-bench/sites/site2.localhost/site_config.json
 
+      - name: Start Redis services
+        run: |
+          redis-server /tmp/ci-bench/config/redis_cache.conf &
+          redis-server /tmp/ci-bench/config/redis_queue.conf &
+          redis-server /tmp/ci-bench/config/redis_socketio.conf &
+          sleep 2
+
       - name: Migrate both sites
         run: |
           BENCH=/tmp/ci-bench/env/bin/bench
