@@ -71,7 +71,7 @@ def _purge_testapp(bench_root: Path, bench_bin: str, site: str) -> None:
     installed = _installed_apps(bench_bin, bench_root, site)
     if APP_NAME in installed:
         subprocess.run(
-            [bench_bin, "--site", site, "remove-app", APP_NAME, "--force"],
+            [bench_bin, "--site", site, "uninstall-app", APP_NAME, "--yes", "--no-backup"],
             cwd=bench_root,
             capture_output=True,
         )
@@ -160,8 +160,8 @@ class TestAppLifecycle:
         self, bench_root: Path, bench_bin: str, site_name: str
     ) -> None:
         """
-        bench --site site1.localhost remove-app testapp --force
-        → passthrough → env/bin/bench --site site1.localhost remove-app testapp --force
+        bench --site site1.localhost uninstall-app testapp --yes --no-backup
+        → passthrough → env/bin/bench frappe --site site1.localhost uninstall-app testapp --yes --no-backup
         Unregisters the app from the site.
         """
         installed = _installed_apps(bench_bin, bench_root, site_name)
@@ -169,11 +169,11 @@ class TestAppLifecycle:
             pytest.skip(f"{APP_NAME} not installed on {site_name} — run test_install_app first")
 
         result = _run(
-            bench_bin, "--site", site_name, "remove-app", APP_NAME, "--force",
+            bench_bin, "--site", site_name, "uninstall-app", APP_NAME, "--yes", "--no-backup",
             cwd=bench_root,
         )
         assert result.returncode == 0, (
-            f"remove-app failed (exit {result.returncode}):\n"
+            f"uninstall-app failed (exit {result.returncode}):\n"
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
         )
 
