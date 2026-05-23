@@ -28,9 +28,11 @@ mariadb:
   # version: "10.6"
 
 redis:
-  cache_port: 13000
-  queue_port: 11000
-  socketio_port: 12000
+  port: 13000             # single Redis instance for all services
+  # or use separate ports:
+  # cache_port: 13000
+  # queue_port: 11000
+  # socketio_port: 12000
 
 workers:
   default: 2
@@ -39,7 +41,8 @@ workers:
 
 admin:
   port: 8002
-  timeout: 180          # seconds of inactivity before the admin UI auto-stops
+  enabled: false        # set to true to enable the admin UI
+  timeout: 180          # seconds of inactivity before the admin UI auto-stops (standalone mode only)
 """
 
 

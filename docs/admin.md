@@ -15,13 +15,27 @@ bench ships a lightweight web-based admin interface built on Flask with no Pytho
 
 ## Starting the admin
 
+The admin process is included in the Procfile and starts automatically with `bench start`. It is always running, but serves a plain **"Admin is off"** page by default. To activate the full UI, set `admin.enabled: true` in `bench.yml` — no restart required, as the config is re-read on every request.
+
+```yaml
+admin:
+  port: 8002
+  enabled: true   # flip this to turn the UI on or off
+```
+
+When `enabled` is `false`:
+- Every request (except static file requests) returns a 503 "Admin is off" page.
+- No filesystem reads, no data queries, no view logic executes.
+
+For standalone use outside of `bench start`:
+
 ```bash
 bench start-admin              # start daemon on default port 8002
 bench start-admin --port 9000  # custom port
 bench stop-admin               # stop the daemon
 ```
 
-The daemon auto-stops after **15 minutes of inactivity** — a background watchdog thread fires `SIGTERM` if no HTTP request arrives within the timeout window. State is tracked in `pids/admin.pid` and `pids/admin.port`.
+The standalone daemon auto-stops after the configured inactivity timeout (default 180 seconds). State is tracked in `pids/admin.pid` and `pids/admin.port`. When managed by the Procfile, the watchdog is disabled — honcho owns the process lifecycle.
 
 For interactive foreground use during development:
 
@@ -424,10 +438,8 @@ Views catch `ConfigError`, `FileNotFoundError`, and database connection errors a
 
 ## CLI commands
 
-Three commands in `bench_cli/cli.py`:
-
 - **`bench start-admin [--port 8002]`** — spawns `bench_cli.admin.server` as a detached subprocess, writes `pids/admin.pid` and `pids/admin.port`, prints the URL.
 - **`bench stop-admin`** — sends `SIGTERM` to the PID in `pids/admin.pid`, cleans up state files.
 - **`bench admin [--port 8001] [--host 127.0.0.1]`** — foreground mode, blocks until `Ctrl-C`.
 
-The daemon entry point (`bench_cli/admin/server.py`) runs `create_app()`, registers a `@app.before_request` hook that updates a module-level timestamp, starts a daemon watchdog thread that polls every 60 seconds, and calls `app.run()`.
+The daemon entry point (`bench_cli/admin/server.py`) accepts `--no-timeout` to disable the inactivity watchdog. This flag is set automatically when the process is launched from the Procfile so that honcho owns the process lifecycle. In standalone mode (via `bench start-admin`), the watchdog fires `SIGTERM` after the configured timeout.

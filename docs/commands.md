@@ -115,24 +115,21 @@ Yarn is installed globally afterward: `npm install -g yarn`.
 
 #### Step 8 — Configure Redis
 
-`RedisManager.generate_configs()` writes three files to `config/`:
+`RedisManager.generate_configs()` writes config files to `config/`. The output depends on whether single-instance or multi-instance mode is used.
 
-**`redis_cache.conf`**
+**Single-instance mode** (`redis.port` is set) — one file:
+
+**`redis.conf`**
 ```
 port 13000
 bind 127.0.0.1
-save ""
 ```
 
-**`redis_queue.conf`**
-```
-port 11000
-bind 127.0.0.1
-```
+**Multi-instance mode** (`cache_port`/`queue_port`/`socketio_port`) — three files:
 
-**`redis_socketio.conf`**
+**`redis_cache.conf`** / **`redis_queue.conf`** / **`redis_socketio.conf`**
 ```
-port 12000
+port <N>
 bind 127.0.0.1
 ```
 
@@ -166,8 +163,9 @@ For each `SiteConfig`, for each app in `site.apps` (in order):
 
 `ProcessManagerFactory.create(bench)` returns the right manager based on `bench.config.process_manager`, then `generate_config()` is called.
 
-**When `process_manager: honcho`** — writes `config/Procfile`:
+**When `process_manager: honcho`** — writes `config/Procfile`.
 
+Single-instance Redis (`redis.port`):
 ```
 web: bench frappe serve --port 8000 --noreload
 socketio: node apps/frappe/socketio.js
@@ -175,10 +173,20 @@ worker_default_1: env/bin/bench worker --queue default
 worker_default_2: env/bin/bench worker --queue default
 worker_short_1: env/bin/bench worker --queue short
 worker_long_1: env/bin/bench worker --queue long
+redis: redis-server config/redis.conf
+admin: python -m bench_cli.admin.server --bench-root . --port 8002 --no-timeout
+```
+
+Multi-instance Redis (`cache_port`/`queue_port`/`socketio_port`):
+```
+...
 redis_cache: redis-server config/redis_cache.conf
 redis_queue: redis-server config/redis_queue.conf
 redis_socketio: redis-server config/redis_socketio.conf
+admin: python -m bench_cli.admin.server --bench-root . --port 8002 --no-timeout
 ```
+
+The `admin` process is always included. It serves a "Admin is off" page by default; set `admin.enabled: true` in `bench.yml` to activate the full UI without restarting.
 
 **When `process_manager: supervisor`** — writes `config/supervisor.conf` with one `[program:X]` section per process (see architecture.md for the full template). This step does **not** start supervisord; that is done by `bench run`.
 
@@ -316,9 +324,23 @@ Runs in order for each site. If migration fails on one site, print the error and
 
 ---
 
+## `bench update-config`
+
+Regenerates all derived config files from `bench.yml` without running a full `bench init`. Use this after editing `bench.yml` to update ports, worker counts, redis settings, or nginx config.
+
+**Files regenerated:**
+- `config/redis.conf` (single-instance) or `config/redis_cache.conf`, `config/redis_queue.conf`, `config/redis_socketio.conf` (multi-instance)
+- `config/Procfile` (honcho) or `config/supervisor.conf` (supervisor)
+- `sites/common_site_config.json`
+- `config/nginx/*.conf` — only if `nginx.enabled: true`
+
+**Does not:** restart processes, reload nginx, or touch apps/sites. Run `bench start` after to pick up process changes. Run `bench setup nginx` to reload nginx.
+
+---
+
 ## `bench start-admin`
 
-Starts the admin web interface as a background daemon.
+Starts the admin web interface as a standalone background daemon, independently of the Procfile.
 
 ```bash
 bench start-admin              # default port 8002
@@ -331,7 +353,9 @@ bench start-admin --port 9000  # custom port
 3. Write `pids/admin.pid` and `pids/admin.port`.
 4. Print the admin URL.
 
-The admin server includes a watchdog that sends `SIGTERM` to itself after **15 minutes of inactivity**. Use `bench stop-admin` to stop it immediately.
+The admin server includes a watchdog that sends `SIGTERM` to itself after the configured inactivity timeout. Use `bench stop-admin` to stop it immediately.
+
+> **Note:** When using `bench start` (honcho/supervisor), the admin process is already included in the Procfile and starts automatically — `bench start-admin` is only needed when running the admin independently of the full bench.
 
 ---
 

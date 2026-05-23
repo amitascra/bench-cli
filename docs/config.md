@@ -40,10 +40,12 @@ mariadb:
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
 redis:
-  cache_port: 13000
-  queue_port: 11000
-  socketio_port: 12000
+  port: 13000               # single Redis instance for all services (simplest)
   version: "7"              # optional — pin to a specific Redis major version
+  # or use separate instances:
+  # cache_port: 13000
+  # queue_port: 11000
+  # socketio_port: 12000
 
 # ── Workers ───────────────────────────────────────────────────────────────────
 workers:
@@ -67,8 +69,9 @@ letsencrypt:
 
 # ── Admin UI ──────────────────────────────────────────────────────────────────
 admin:
-  port: 8002     # port the admin UI listens on (bench start-admin)
-  timeout: 900   # seconds of inactivity before auto-stop (default: 15 min)
+  port: 8002        # port the admin UI listens on
+  enabled: false    # set to true to enable the admin UI
+  timeout: 180      # seconds of inactivity before auto-stop (standalone mode only)
 ```
 
 ---
@@ -127,14 +130,17 @@ Each entry describes a Frappe site to create under `sites/`.
 
 ### `redis`
 
+**Single-instance mode** (recommended for most benches): specify one `port` and a single Redis server handles all three services using separate database numbers (`/0` cache, `/1` queue, `/2` socketio).
+
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `cache_port` | int | no | `13000` | Port for the Redis cache instance. |
-| `queue_port` | int | no | `11000` | Port for the Redis queue instance. |
-| `socketio_port` | int | no | `12000` | Port for the Redis socketio instance. |
+| `port` | int | no | — | Run a single Redis instance on this port for all services. When set, `cache_port`/`queue_port`/`socketio_port` are ignored. |
+| `cache_port` | int | no | `13000` | Port for the Redis cache instance (multi-instance mode). |
+| `queue_port` | int | no | `11000` | Port for the Redis queue instance (multi-instance mode). |
+| `socketio_port` | int | no | `12000` | Port for the Redis socketio instance (multi-instance mode). |
 | `version` | string | no | — | Redis version to install (e.g. `"7"`, `"7.0"`). On macOS, selects the `redis@<version>` Homebrew formula. On Ubuntu, apt has no versioned redis package names — use the official Redis apt repository for version pinning, then omit this field. |
 
-All three ports must be distinct and not in use by other processes.
+In single-instance mode, one `redis` process appears in the Procfile and one `redis.conf` is written to `config/`. In multi-instance mode, three separate processes (`redis_cache`, `redis_queue`, `redis_socketio`) and three config files are generated. All ports must be in the range 1024–65535.
 
 ### `workers`
 
@@ -166,10 +172,13 @@ Omit this section entirely for development benches. The section is only read by 
 
 ### `admin`
 
+The admin process always starts as part of the Procfile. When `enabled` is `false` (the default), every request returns a plain "Admin is off" page — no data is read and no API logic runs. Set `enabled: true` in `bench.yml` to turn on the full UI; no restart is required since the config is re-read on each request.
+
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `port` | int | no | `8002` | Port the admin UI listens on when started with `bench start-admin`. The `--port` CLI flag overrides this. |
-| `timeout` | int | no | `900` | Seconds of inactivity before the admin process auto-stops. Default is 15 minutes (900 s). |
+| `port` | int | no | `8002` | Port the admin process listens on. |
+| `enabled` | bool | no | `false` | Set to `true` to enable the admin UI. When `false`, all routes return a "Admin is off" page. |
+| `timeout` | int | no | `180` | Seconds of inactivity before the admin process auto-stops. Only applies when started standalone via `bench start-admin`, not when managed by the Procfile. |
 
 ---
 
@@ -184,7 +193,7 @@ bench validates `bench.yml` before executing any command. Violations produce a c
 5. All `sites[].name` values must be unique.
 6. All `sites[].apps` values must reference a name in `apps[].name`.
 7. Each `sites[].apps` list must begin with the framework app (first entry in `apps`).
-8. All three Redis ports must be distinct integers in the range 1024–65535.
+8. All Redis ports must be integers in the range 1024–65535. In multi-instance mode (`cache_port`/`queue_port`/`socketio_port`), each port must be distinct.
 9. Worker counts must be positive integers.
 10. If any `sites[].ssl` is `true`, then `nginx.enabled` must be `true` and `letsencrypt.email` must be non-empty.
 11. `letsencrypt.email` must match a basic email pattern (`^[^@]+@[^@]+\.[^@]+$`) when present.
@@ -215,7 +224,5 @@ mariadb:
   root_password: "root"
 
 redis:
-  cache_port: 13000
-  queue_port: 11000
-  socketio_port: 12000
+  port: 13000
 ```

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 
 from bench_cli.admin.views.apps import apps_bp
 from bench_cli.admin.views.dashboard import dashboard_bp
@@ -11,12 +11,24 @@ from bench_cli.admin.views.logs import logs_bp
 from bench_cli.admin.views.processes import processes_bp
 from bench_cli.admin.views.sites import sites_bp
 from bench_cli.admin.views.tasks import tasks_bp
+from bench_cli.config.bench_config import BenchConfig
 from bench_cli.exceptions import ConfigError
 
 
 def create_app(bench_root: Path) -> Flask:
     app = Flask(__name__, template_folder="templates")
     app.config["BENCH_ROOT"] = bench_root
+
+    @app.before_request
+    def _check_admin_enabled():
+        if request.path.startswith("/static"):
+            return None
+        try:
+            config = BenchConfig.from_file(bench_root / "bench.yml")
+            if not config.admin.enabled:
+                return render_template("admin_off.html"), 503
+        except Exception:
+            return render_template("admin_off.html"), 503
 
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(apps_bp, url_prefix="/apps")

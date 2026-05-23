@@ -1,12 +1,12 @@
-class Bench2Error(Exception):
+class BenchError(Exception):
     pass
 
 
-class ConfigError(Bench2Error):
+class ConfigError(BenchError):
     pass
 
 
-class BenchError(Bench2Error):
+class BenchError(BenchError):
     pass
 
 

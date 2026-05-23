@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,10 +44,29 @@ class ProcessManager(ABC):
         definitions.extend(self._worker_definitions("default", self.bench.config.workers.default_count))
         definitions.extend(self._worker_definitions("short", self.bench.config.workers.short_count))
         definitions.extend(self._worker_definitions("long", self.bench.config.workers.long_count))
-        definitions.append(self._redis_definition("redis_cache", "redis_cache.conf"))
-        definitions.append(self._redis_definition("redis_queue", "redis_queue.conf"))
-        definitions.append(self._redis_definition("redis_socketio", "redis_socketio.conf"))
+        if self.bench.config.redis.is_single_instance:
+            definitions.append(self._redis_definition("redis", "redis.conf"))
+        else:
+            definitions.append(self._redis_definition("redis_cache", "redis_cache.conf"))
+            definitions.append(self._redis_definition("redis_queue", "redis_queue.conf"))
+            definitions.append(self._redis_definition("redis_socketio", "redis_socketio.conf"))
+        definitions.append(self._admin_definition())
         return definitions
+
+    def _admin_definition(self) -> ProcessDefinition:
+        port = self.bench.config.admin.port
+        bench_root = self.bench.path
+        command = (
+            f"{sys.executable} -m bench_cli.admin.server"
+            f" --bench-root {bench_root}"
+            f" --port {port}"
+            f" --no-timeout"
+        )
+        return ProcessDefinition(
+            name="admin",
+            command=command,
+            log_file=self.bench.logs_path / "admin.log",
+        )
 
     def _web_definition(self) -> ProcessDefinition:
         port = self.bench.config.http_port

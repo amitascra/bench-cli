@@ -5,3 +5,4 @@ from dataclasses import dataclass
 class AdminConfig:
     port: int = 8002
     timeout: int = 180  # seconds
+    enabled: bool = False

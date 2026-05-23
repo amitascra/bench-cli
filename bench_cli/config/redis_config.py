@@ -8,3 +8,7 @@ class RedisConfig:
     queue_port: int = 11000
     socketio_port: int = 12000
     version: Optional[str] = None
+
+    @property
+    def is_single_instance(self) -> bool:
+        return self.cache_port == self.queue_port == self.socketio_port

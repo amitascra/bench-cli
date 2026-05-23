@@ -3,7 +3,7 @@ from pathlib import Path
 
 import click
 
-from bench_cli.exceptions import Bench2Error, BenchError
+from bench_cli.exceptions import BenchError, BenchError
 
 # Options that bench-cli's own group handles; everything else is treated as a
 # signal that the invocation should be forwarded to the Frappe bench binary.
@@ -65,7 +65,7 @@ def new(context: click.Context) -> None:
     try:
         from bench_cli.commands.new import NewCommand
         NewCommand(Path.cwd()).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -77,7 +77,7 @@ def init(context: click.Context) -> None:
         from bench_cli.commands.init import InitCommand
         bench = _load_bench()
         InitCommand(bench).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -91,7 +91,7 @@ def frappe_cmd(context: click.Context, args: tuple) -> None:
         from bench_cli.commands.frappe_cmd import FrappeCommand
         bench = _load_bench()
         FrappeCommand(bench).run(args)
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -132,7 +132,7 @@ def get_app(repo: str, branch: str) -> None:
             apps_txt.write_text("\n".join(existing + [name]) + "\n")
 
         click.echo(f"\n'{name}' installed successfully.")
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -144,7 +144,7 @@ def start(context: click.Context) -> None:
         from bench_cli.commands.run import RunCommand
         bench = _load_bench()
         RunCommand(bench).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -156,7 +156,7 @@ def stop(context: click.Context) -> None:
         from bench_cli.commands.stop import StopCommand
         bench = _load_bench()
         StopCommand(bench).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -170,7 +170,7 @@ def kill_orphaned(context: click.Context) -> None:
         bench = _load_bench()
         yes = context.obj.get("yes", False)
         KillOrphanedCommand(bench, skip_confirm=yes).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -184,7 +184,7 @@ def start_admin(context: click.Context, port: int | None) -> None:
         from bench_cli.commands.start_admin import StartAdminCommand
         bench = _load_bench()
         StartAdminCommand(bench, port=port).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -197,7 +197,7 @@ def stop_admin(context: click.Context) -> None:
         from bench_cli.commands.stop_admin import StopAdminCommand
         bench = _load_bench()
         StopAdminCommand(bench).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -209,7 +209,7 @@ def build(context: click.Context) -> None:
         from bench_cli.commands.build import BuildCommand
         bench = _load_bench()
         BuildCommand(bench).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -222,7 +222,19 @@ def update(context: click.Context) -> None:
         bench = _load_bench()
         yes = context.obj.get("yes", False)
         UpdateCommand(bench, skip_confirm=yes).run()
-    except Bench2Error as error:
+    except BenchError as error:
+        click.echo(str(error), err=True)
+        sys.exit(1)
+
+
+@cli.command("update-config")
+def update_config() -> None:
+    """Regenerate all config files (Procfile/supervisor, redis, nginx, common_site_config) from bench.yml."""
+    try:
+        from bench_cli.commands.update_config import UpdateConfigCommand
+        bench = _load_bench()
+        UpdateConfigCommand(bench).run()
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -262,7 +274,7 @@ def setup_nginx(context: click.Context) -> None:
         from bench_cli.commands.setup.nginx import SetupNginxCommand
         bench = _load_bench()
         SetupNginxCommand(bench).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -274,7 +286,7 @@ def setup_letsencrypt(context: click.Context) -> None:
         from bench_cli.commands.setup.letsencrypt import SetupLetsEncryptCommand
         bench = _load_bench()
         SetupLetsEncryptCommand(bench).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 
@@ -286,7 +298,7 @@ def setup_production(context: click.Context) -> None:
         from bench_cli.commands.setup.production import SetupProductionCommand
         bench = _load_bench()
         SetupProductionCommand(bench).run()
-    except Bench2Error as error:
+    except BenchError as error:
         click.echo(str(error), err=True)
         sys.exit(1)
 

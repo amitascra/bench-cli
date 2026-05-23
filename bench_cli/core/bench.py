@@ -70,10 +70,18 @@ class Bench:
 
     def write_common_site_config(self) -> None:
         r = self.config.redis
+        if r.is_single_instance:
+            redis_cache = f"redis://localhost:{r.cache_port}/0"
+            redis_queue = f"redis://localhost:{r.cache_port}/1"
+            redis_socketio = f"redis://localhost:{r.cache_port}/2"
+        else:
+            redis_cache = f"redis://localhost:{r.cache_port}"
+            redis_queue = f"redis://localhost:{r.queue_port}"
+            redis_socketio = f"redis://localhost:{r.socketio_port}"
         config = {
-            "redis_cache": f"redis://localhost:{r.cache_port}",
-            "redis_queue": f"redis://localhost:{r.queue_port}",
-            "redis_socketio": f"redis://localhost:{r.socketio_port}",
+            "redis_cache": redis_cache,
+            "redis_queue": redis_queue,
+            "redis_socketio": redis_socketio,
             "socketio_port": self.config.socketio_port,
             "webserver_port": self.config.http_port,
         }

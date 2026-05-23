@@ -53,7 +53,7 @@ class BenchConfig:
         apps = [AppConfig(**app) for app in data.get("apps", [])]
         sites = [cls._parse_site(site) for site in data.get("sites", [])]
         mariadb = MariaDBConfig(**data.get("mariadb", {}))
-        redis = RedisConfig(**data.get("redis", {}))
+        redis = cls._parse_redis(data.get("redis", {}))
         workers = cls._parse_workers(data.get("workers", {}))
         nginx = cls._parse_nginx(data.get("nginx", {}))
         letsencrypt = cls._parse_letsencrypt(data.get("letsencrypt", {}))
@@ -82,6 +82,23 @@ class BenchConfig:
             admin_password=data.get("admin_password", "admin"),
             domains=data.get("domains", []),
             ssl=data.get("ssl", False),
+        )
+
+    @staticmethod
+    def _parse_redis(data: dict) -> RedisConfig:
+        if "port" in data:
+            port = data["port"]
+            return RedisConfig(
+                cache_port=port,
+                queue_port=port,
+                socketio_port=port,
+                version=data.get("version"),
+            )
+        return RedisConfig(
+            cache_port=data.get("cache_port", 13000),
+            queue_port=data.get("queue_port", 11000),
+            socketio_port=data.get("socketio_port", 12000),
+            version=data.get("version"),
         )
 
     @staticmethod
@@ -117,6 +134,7 @@ class BenchConfig:
         return AdminConfig(
             port=data.get("port", 8002),
             timeout=data.get("timeout", 180),
+            enabled=data.get("enabled", False),
         )
 
     def validate(self) -> None:
@@ -211,8 +229,8 @@ class BenchConfig:
                 raise ConfigError(
                     f"{name} {port} is out of range. Must be between {_REDIS_PORT_MIN} and {_REDIS_PORT_MAX}."
                 )
-        if len(set(ports)) != len(ports):
-            raise ConfigError("redis.cache_port, redis.queue_port, and redis.socketio_port must all be distinct.")
+        # if len(set(ports)) != len(ports):
+        #     raise ConfigError("redis.cache_port, redis.queue_port, and redis.socketio_port must all be distinct.")
 
     def _validate_worker_counts(self) -> None:
         counts = {
