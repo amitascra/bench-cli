@@ -10,6 +10,7 @@ dist/
 build/
 .eggs/
 wheels/
+uv.lock
 
 # Virtual environments
 env/
@@ -21,14 +22,6 @@ venv/
 .coverage
 htmlcov/
 *.log
-
-# bench runtime directories (created by bench init / bench run)
-/apps/
-/sites/
-/logs/
-/config/
-/pids/
-/tasks/
 
 # macOS
 .DS_Store
