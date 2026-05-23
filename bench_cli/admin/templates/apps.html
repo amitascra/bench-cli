@@ -45,50 +45,159 @@
 
 <!-- Add App modal -->
 <div class="modal" id="add-app-modal">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-lg">
     <div class="modal-header">
       <h3>Add App</h3>
       <button class="modal-close" data-modal-close aria-label="Close">&times;</button>
     </div>
-    <form id="add-app-form" style="display:block">
-      <div class="modal-body">
-        <div class="form-group">
-          <label for="app-name">Name</label>
-          <input type="text" id="app-name" placeholder="erpnext" required>
-        </div>
-        <div class="form-group">
-          <label for="app-repo">Repository URL</label>
-          <input type="text" id="app-repo" placeholder="https://github.com/frappe/erpnext" required>
-        </div>
-        <div class="form-group">
-          <label for="app-branch">Branch</label>
-          <input type="text" id="app-branch" placeholder="version-16">
-          <p class="form-hint">Leave blank to use the repo default branch.</p>
+
+    <!-- Registry picker -->
+    <div id="picker-view">
+      <div class="app-search">
+        <input type="text" id="registry-search" placeholder="Search apps…" autocomplete="off">
+      </div>
+      <div class="app-list" id="registry-list">
+        <p class="app-list-empty">Loading…</p>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between">
+        <button type="button" id="to-manual">Enter manually</button>
+        <div style="display:flex;gap:8px">
+          <button type="button" data-modal-close>Cancel</button>
+          <button type="button" class="btn-primary" id="picker-add" disabled>Add App</button>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" data-modal-close>Cancel</button>
-        <button type="submit" class="btn-primary" id="add-app-submit">Add App</button>
-      </div>
-    </form>
+    </div>
+
+    <!-- Manual entry -->
+    <div id="manual-view" style="display:none">
+      <form id="manual-form" style="display:block">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="app-name">Name</label>
+            <input type="text" id="app-name" placeholder="my_app" required>
+          </div>
+          <div class="form-group">
+            <label for="app-repo">Repository URL</label>
+            <input type="text" id="app-repo" placeholder="https://github.com/org/repo" required>
+          </div>
+          <div class="form-group">
+            <label for="app-branch">Branch</label>
+            <input type="text" id="app-branch" placeholder="main">
+            <p class="form-hint">Leave blank to use the repo default branch.</p>
+          </div>
+        </div>
+        <div class="modal-footer" style="justify-content:space-between">
+          <button type="button" id="to-picker">← Back to registry</button>
+          <div style="display:flex;gap:8px">
+            <button type="button" data-modal-close>Cancel</button>
+            <button type="submit" class="btn-primary" id="manual-add">Add App</button>
+          </div>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
 <script>
   const addAppModal = new Modal('add-app-modal')
+  let registry = []
+  let selected = null
 
-  document.getElementById('open-add-app').addEventListener('click', () => addAppModal.open())
+  const COLORS = ['#4f46e5','#0891b2','#059669','#d97706','#dc2626','#7c3aed','#db2777','#65a30d','#0e7490','#b45309']
+  function hashColor(name) {
+    let h = 0
+    for (const c of name) h = (h * 31 + c.charCodeAt(0)) | 0
+    return COLORS[Math.abs(h) % COLORS.length]
+  }
 
-  document.getElementById('add-app-form').addEventListener('submit', async e => {
+  function filtered() {
+    const q = document.getElementById('registry-search').value.toLowerCase()
+    return q ? registry.filter(a =>
+      a.name.includes(q) ||
+      (a.title  || '').toLowerCase().includes(q) ||
+      (a.description || '').toLowerCase().includes(q)
+    ) : registry
+  }
+
+  function renderApps() {
+    const list = document.getElementById('registry-list')
+    const apps = filtered()
+    if (!apps.length) {
+      list.innerHTML = '<p class="app-list-empty">No apps found</p>'
+      return
+    }
+    list.innerHTML = apps.map(a => {
+      const initial = (a.title || a.name)[0].toUpperCase()
+      const avatar  = a.logo_url
+        ? `<div class="app-avatar"><img src="${a.logo_url}" alt=""></div>`
+        : `<div class="app-avatar" style="background:${hashColor(a.name)}">${initial}</div>`
+      const sel = selected?.name === a.name ? ' is-selected' : ''
+      return `<div class="app-item${sel}" data-name="${a.name}">
+        ${avatar}
+        <div class="app-meta">
+          <div class="app-meta-name">${a.title || a.name}</div>
+          <div class="app-meta-desc">${a.description || ''}</div>
+        </div>
+      </div>`
+    }).join('')
+    list.querySelectorAll('.app-item').forEach(el => {
+      el.addEventListener('click', () => {
+        selected = registry.find(a => a.name === el.dataset.name) || null
+        document.getElementById('picker-add').disabled = !selected
+        renderApps()
+      })
+    })
+  }
+
+  // Fetch registry once on page load
+  ;(async () => {
+    try {
+      const res = await fetch('/apps/registry')
+      registry  = await res.json()
+    } catch { registry = [] }
+    renderApps()
+  })()
+
+  document.getElementById('open-add-app').addEventListener('click', () => {
+    selected = null
+    document.getElementById('registry-search').value = ''
+    document.getElementById('picker-add').disabled = true
+    document.getElementById('picker-view').style.display = ''
+    document.getElementById('manual-view').style.display  = 'none'
+    renderApps()
+    addAppModal.open()
+  })
+
+  document.getElementById('registry-search').addEventListener('input', renderApps)
+
+  document.getElementById('to-manual').addEventListener('click', () => {
+    document.getElementById('picker-view').style.display  = 'none'
+    document.getElementById('manual-view').style.display  = ''
+  })
+  document.getElementById('to-picker').addEventListener('click', () => {
+    document.getElementById('manual-view').style.display  = 'none'
+    document.getElementById('picker-view').style.display  = ''
+  })
+
+  document.getElementById('picker-add').addEventListener('click', () => {
+    if (selected) doAdd(selected.name, selected.repo, selected.branch || '', 'picker-add')
+  })
+
+  document.getElementById('manual-form').addEventListener('submit', e => {
     e.preventDefault()
-    const submit = document.getElementById('add-app-submit')
-    submit.disabled = true
-    submit.textContent = 'Adding…'
+    doAdd(
+      document.getElementById('app-name').value.trim(),
+      document.getElementById('app-repo').value.trim(),
+      document.getElementById('app-branch').value.trim(),
+      'manual-add'
+    )
+  })
 
-    const name   = document.getElementById('app-name').value.trim()
-    const repo   = document.getElementById('app-repo').value.trim()
-    const branch = document.getElementById('app-branch').value.trim()
-
+  async function doAdd(name, repo, branch, btnId) {
+    const btn  = document.getElementById(btnId)
+    const orig = btn.textContent
+    btn.disabled = true
+    btn.textContent = 'Adding…'
     try {
       const res  = await fetch('/apps/add', {
         method: 'POST',
@@ -105,10 +214,10 @@
     } catch {
       Toast.show('Request failed. Is the server running?', 'error')
     } finally {
-      submit.disabled = false
-      submit.textContent = 'Add App'
+      btn.disabled    = false
+      btn.textContent = orig
     }
-  })
+  }
 </script>
 
 {% endblock %}

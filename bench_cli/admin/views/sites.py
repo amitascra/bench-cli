@@ -26,15 +26,22 @@ def index():
 
 @sites_bp.route("/<name>")
 def detail(name: str):
-    bench_root = current_app.config["BENCH_ROOT"]
+    bench_root = Path(current_app.config["BENCH_ROOT"])
     try:
         site = SiteReader(bench_root).read_one(name)
     except Exception as error:
         return render_template("error.html", error=str(error))
 
+    try:
+        from bench_cli.config.bench_config import BenchConfig
+        cfg = BenchConfig.from_file(bench_root / "bench.yml")
+        installable = [a.name for a in cfg.apps if a.name not in site.installed_apps]
+    except Exception:
+        installable = []
+
     masked_config = _mask_password(site.site_config)
     masked_json = json.dumps(masked_config, indent=2)
-    return render_template("sites/detail.html", site=site, site_config_json=masked_json)
+    return render_template("sites/detail.html", site=site, site_config_json=masked_json, installable_apps=installable)
 
 
 @sites_bp.route("/create", methods=["POST"])

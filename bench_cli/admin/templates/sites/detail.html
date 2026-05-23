@@ -56,8 +56,16 @@
       <input type="hidden" name="command" value="install-app">
       <input type="hidden" name="site" value="{{ site.name }}">
       <label>Install app</label>
-      <input type="text" name="app" placeholder="app-name" style="width:180px">
-      <button type="submit">Install</button>
+      {% if installable_apps %}
+        <select name="app">
+          {% for app in installable_apps %}
+          <option value="{{ app }}">{{ app }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Install</button>
+      {% else %}
+        <span class="text-muted">All bench apps are already installed</span>
+      {% endif %}
     </form>
   </div>
 </div>

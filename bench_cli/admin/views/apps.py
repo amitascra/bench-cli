@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import yaml
@@ -9,6 +10,8 @@ from bench_cli.admin.readers.app_reader import AppReader
 from bench_cli.tasks.task_runner import TaskRunner
 
 apps_bp = Blueprint("apps", __name__)
+
+_REGISTRY_PATH = Path(__file__).parent.parent.parent.parent / "registry" / "apps.json"
 
 
 @apps_bp.route("/")
@@ -20,6 +23,14 @@ def index():
         return render_template("error.html", error=str(error))
 
     return render_template("apps.html", apps=apps)
+
+
+@apps_bp.route("/registry")
+def registry():
+    try:
+        return jsonify(json.loads(_REGISTRY_PATH.read_text()))
+    except Exception:
+        return jsonify([])
 
 
 @apps_bp.route("/add", methods=["POST"])
