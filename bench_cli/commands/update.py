@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import click
+import sys
 
 from bench_cli.core.bench import Bench
 from bench_cli.exceptions import CommandError
@@ -20,38 +20,44 @@ class UpdateCommand:
         self._migrate_sites()
 
     def _warn_if_running(self) -> None:
-        process_manager = ProcessManagerFactory.create(self.bench)
-        if not process_manager.is_running():
+        if not ProcessManagerFactory.create(self.bench).is_running():
             return
-        click.echo(
+        print(
             "Warning: bench processes appear to be running. "
             "Updating while running may cause instability."
         )
         if not self.skip_confirm:
-            click.confirm("Continue anyway?", abort=True)
+            try:
+                answer = input("Continue anyway? [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\nAborted.")
+                sys.exit(1)
+            if answer not in ("y", "yes"):
+                print("Aborted.")
+                sys.exit(1)
 
     def _update_apps(self) -> None:
         for app in self.bench.apps():
-            click.echo(f"Updating {app.config.name}...")
+            print(f"Updating {app.config.name}...")
             try:
                 app.update()
-            except CommandError as error:
-                click.echo(f"  Error updating {app.config.name}: {error}", err=True)
+            except CommandError as e:
+                print(f"  Error updating {app.config.name}: {e}", file=sys.stderr)
 
     def _reinstall_apps(self) -> None:
-        python_env_manager = PythonEnvManager(self.bench)
+        mgr = PythonEnvManager(self.bench)
         for app in self.bench.apps():
-            click.echo(f"Reinstalling {app.config.name}...")
-            python_env_manager.install_app(app)
+            print(f"Reinstalling {app.config.name}...")
+            mgr.install_app(app)
 
     def _migrate_sites(self) -> None:
         failed = False
         for site in self.bench.sites():
-            click.echo(f"Migrating {site.config.name}...")
+            print(f"Migrating {site.config.name}...")
             try:
                 site.migrate()
-            except CommandError as error:
-                click.echo(f"  Migration failed for {site.config.name}: {error}", err=True)
+            except CommandError as e:
+                print(f"  Migration failed for {site.config.name}: {e}", file=sys.stderr)
                 failed = True
         if failed:
-            raise SystemExit(1)
+            sys.exit(1)

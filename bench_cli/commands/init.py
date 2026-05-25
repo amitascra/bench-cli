@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import click
-
 from bench_cli.core.bench import Bench
 from bench_cli.managers.python_env_manager import PythonEnvManager
 from bench_cli.managers.redis_manager import RedisManager
@@ -13,7 +11,7 @@ class InitCommand:
         self.bench = bench
 
     def run(self) -> None:
-        self._step(1, "Validate bench.yml")
+        self._step(1, "Validate bench.toml")
         self.bench.config.validate()
 
         self._step(2, "Install system packages")
@@ -29,43 +27,33 @@ class InitCommand:
         python_env_manager.create_venv()
         python_env_manager.generate_bench_script()
 
-        self._step(5, "Clone apps")
-        for app in self.bench.apps():
+        self._step(5, "Clone and install framework app")
+        for app in self.bench.init_apps():
             if not app.is_cloned:
-                click.echo(f"  Cloning {app.config.name}...")
+                print(f"  Cloning {app.config.name}...")
                 app.clone()
-
-        self._step(6, "Install Python dependencies")
-        for app in self.bench.apps():
-            click.echo(f"  Installing {app.config.name}...")
+            print(f"  Installing {app.config.name}...")
             python_env_manager.install_app(app)
         self.bench.write_apps_txt()
 
-        self._step(7, "Install Node.js")
+        self._step(6, "Install Node.js")
         python_env_manager.install_node()
 
-        self._step(8, "Install Node.js dependencies")
+        self._step(7, "Install Node.js dependencies")
         python_env_manager.install_node_dependencies()
 
-        self._step(9, "Configure Redis")
+        self._step(8, "Configure Redis")
         RedisManager(self.bench.config.redis, self.bench).generate_configs()
 
-        self._step(10, "Create sites")
-        self._create_sites()
-
-        self._step(11, "Install apps on sites")
-        self._install_apps_on_sites()
-
-        self._step(12, "Build assets")
-        python_env_manager.build_assets()
-
-        self._step(13, "Generate process manager config")
+        self._step(9, "Generate Procfile")
         ProcessManagerFactory.create(self.bench).generate_config()
 
-        click.echo("Bench initialised successfully. Run: bench start")
+        print("\nBench initialised. Next steps:")
+        print("  bench new-site site1.localhost   # create your first site")
+        print("  bench start                      # start all processes")
 
     def _step(self, number: int, description: str) -> None:
-        click.echo(f"[{number}/13] {description}...")
+        print(f"[{number}/9] {description}...", flush=True)
 
     def _install_system_packages(self) -> None:
         from bench_cli.managers.mariadb_manager import MariaDBManager
@@ -78,18 +66,3 @@ class InitCommand:
             pkg = get_package_manager()
             pkg.install("build-essential", "pkg-config", "libmariadb-dev", "git")
         PythonEnvManager(self.bench).ensure_python()
-
-    def _create_sites(self) -> None:
-        for site in self.bench.sites():
-            if not site.exists:
-                click.echo(f"  Creating site {site.config.name}...")
-                site.create()
-
-    def _install_apps_on_sites(self) -> None:
-        framework_name = self.bench.config.framework_app.name
-        for site in self.bench.sites():
-            for app_name in site.config.apps:
-                if app_name == framework_name:
-                    continue
-                click.echo(f"  Installing {app_name} on {site.config.name}...")
-                site.install_app(app_name)

@@ -1,3 +1,6 @@
+# Benches (created by `bench new`)
+benches/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -16,6 +19,7 @@ uv.lock
 env/
 venv/
 .venv/
+.admin-venv/
 
 # pytest
 .pytest_cache/

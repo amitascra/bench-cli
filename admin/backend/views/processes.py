@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from flask import Blueprint, current_app, jsonify
 
-from ..readers.bench_reader import BenchReader
 from ..readers.process_reader import ProcessReader
 
 processes_bp = Blueprint("processes", __name__)
@@ -13,8 +12,6 @@ def index():
     bench_root = current_app.config["BENCH_ROOT"]
     try:
         processes = ProcessReader(bench_root).read_all()
-        config = BenchReader(bench_root).config()
-        process_manager = config.process_manager
     except Exception as error:
         return jsonify({"error": str(error)}), 500
 
@@ -29,5 +26,4 @@ def index():
             }
             for p in processes
         ],
-        "process_manager": process_manager,
     })

@@ -24,7 +24,7 @@ def main() -> None:
     from bench_cli.core.bench import Bench
     from bench_cli.managers.python_env_manager import PythonEnvManager
 
-    cfg = BenchConfig.from_file(bench_root / "bench.yml")
+    cfg = BenchConfig.from_file(bench_root / "bench.toml")
     bench = Bench(cfg, bench_root)
     app_cfg = AppConfig(name=args.name, repo=args.repo, branch=args.branch or "main")
     app = App(app_cfg, bench)

@@ -4,8 +4,6 @@ import os
 import signal
 from typing import TYPE_CHECKING
 
-import click
-
 if TYPE_CHECKING:
     from bench_cli.core.bench import Bench
 
@@ -24,15 +22,15 @@ class StopAdminCommand:
 
     def run(self) -> None:
         if not self._pid_file.exists():
-            click.echo("Admin is not running.")
+            print("Admin is not running.")
             return
 
         pid = int(self._pid_file.read_text().strip())
         try:
             os.kill(pid, signal.SIGTERM)
         except ProcessLookupError:
-            pass  # Already dead — still clean up state files
+            pass
 
         self._pid_file.unlink(missing_ok=True)
         self._port_file.unlink(missing_ok=True)
-        click.echo("Admin stopped.")
+        print("Admin stopped.")

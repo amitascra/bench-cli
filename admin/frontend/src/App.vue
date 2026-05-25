@@ -12,7 +12,7 @@ onMounted(async () => {
     const data = await res.json()
     adminEnabled.value = data.enabled !== false
     if (!adminEnabled.value) {
-      adminError.value = data.error || 'Admin is disabled in bench.yml'
+      adminError.value = data.error || 'Admin is disabled in bench.toml'
     }
   } catch (e) {
     adminError.value = 'Could not reach the bench admin server.'

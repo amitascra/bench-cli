@@ -93,7 +93,6 @@ onUnmounted(() => clearInterval(timer))
         <div class="flex flex-wrap gap-2">
           <Button variant="outline" @click="runTask('build')">Build Assets</Button>
           <Button variant="outline" @click="runTask('update')">Update Bench</Button>
-          <Button variant="outline" @click="runTask('reload-supervisor')">Reload Supervisor</Button>
         </div>
         <ErrorMessage :message="actionError" class="mt-2" />
       </Card>

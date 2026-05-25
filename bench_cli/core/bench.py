@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, List
 
@@ -45,12 +46,41 @@ class Bench:
         return self.env_path / "bin" / "python"
 
     def apps(self) -> List["App"]:
+        """Return all cloned apps by scanning apps/ directory."""
+        from bench_cli.config.app_config import AppConfig
+        from bench_cli.core.app import App
+
+        if not self.apps_path.is_dir():
+            return []
+        result = []
+        for d in sorted(self.apps_path.iterdir()):
+            if d.is_dir() and (d / ".git").exists():
+                app_config = AppConfig(
+                    name=d.name,
+                    repo=self._git_remote(d),
+                    branch=self._git_branch(d),
+                )
+                result.append(App(app_config, self))
+        return result
+
+    def init_apps(self) -> List["App"]:
+        """Return apps declared in bench.toml (used only during bench init)."""
         from bench_cli.core.app import App
         return [App(app_config, self) for app_config in self.config.apps]
 
     def sites(self) -> List["Site"]:
+        """Return all sites by scanning sites/ directory."""
+        from bench_cli.config.site_config import SiteConfig
         from bench_cli.core.site import Site
-        return [Site(site_config, self) for site_config in self.config.sites]
+
+        if not self.sites_path.is_dir():
+            return []
+        result = []
+        for d in sorted(self.sites_path.iterdir()):
+            if d.is_dir() and (d / "site_config.json").exists():
+                site_config = SiteConfig(name=d.name, apps=[])
+                result.append(Site(site_config, self))
+        return result
 
     def create_directories(self) -> None:
         for directory in [
@@ -64,9 +94,10 @@ class Bench:
             directory.mkdir(parents=True, exist_ok=True)
 
     def write_apps_txt(self) -> None:
+        """Write apps.txt from currently cloned apps in apps/ directory."""
         apps_txt = self.sites_path / "apps.txt"
-        app_names = "\n".join(app.name for app in self.config.apps)
-        apps_txt.write_text(app_names + "\n")
+        names = [app.config.name for app in self.apps()]
+        apps_txt.write_text("\n".join(names) + "\n" if names else "")
 
     def write_common_site_config(self) -> None:
         r = self.config.redis
@@ -85,8 +116,29 @@ class Bench:
             "socketio_port": self.config.socketio_port,
             "webserver_port": self.config.http_port,
         }
-        default = next((s for s in self.config.sites if s.default), None)
-        if default:
-            config["default_site"] = default.name
+        # Use first site found as default (if any exist)
+        first_site = next(
+            (d.name for d in sorted(self.sites_path.iterdir())
+             if d.is_dir() and (d / "site_config.json").exists()),
+            None,
+        ) if self.sites_path.is_dir() else None
+        if first_site:
+            config["default_site"] = first_site
         config_path = self.sites_path / "common_site_config.json"
         config_path.write_text(json.dumps(config, indent=2) + "\n")
+
+    @staticmethod
+    def _git_remote(path: Path) -> str:
+        result = subprocess.run(
+            ["git", "-C", str(path), "remote", "get-url", "origin"],
+            capture_output=True, text=True,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    @staticmethod
+    def _git_branch(path: Path) -> str:
+        result = subprocess.run(
+            ["git", "-C", str(path), "branch", "--show-current"],
+            capture_output=True, text=True,
+        )
+        return result.stdout.strip() if result.returncode == 0 else ""

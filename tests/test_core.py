@@ -1,5 +1,4 @@
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,22 +12,17 @@ from bench_cli.core.app import App
 from bench_cli.core.bench import Bench
 from bench_cli.core.site import Site
 from bench_cli.managers.honcho_process_manager import HonchoProcessManager
-from bench_cli.managers.supervisor_process_manager import SupervisorProcessManager
 
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
 
-def make_bench(tmp_path: Path, process_manager: str = "honcho") -> Bench:
+def make_bench(tmp_path: Path) -> Bench:
     config = BenchConfig(
         name="test-bench",
         python_version="3.14",
-        process_manager=process_manager,
         apps=[
             AppConfig(name="frappe", repo="https://github.com/frappe/frappe", branch="version-16"),
-        ],
-        sites=[
-            SiteConfig(name="site1.localhost", apps=["frappe"]),
         ],
         mariadb=MariaDBConfig(root_password="root"),
         redis=RedisConfig(cache_port=13000, queue_port=11000, socketio_port=12000),
@@ -119,17 +113,63 @@ def test_bench_create_directories(tmp_path: Path) -> None:
     assert (tmp_path / "pids").is_dir()
 
 
+def test_bench_apps_scans_filesystem(tmp_path: Path) -> None:
+    """bench.apps() discovers apps from apps/ directory, not bench.toml."""
+    bench = make_bench(tmp_path)
+    bench.create_directories()
+
+    # Create a fake cloned app
+    app_dir = tmp_path / "apps" / "testapp"
+    app_dir.mkdir()
+    (app_dir / ".git").mkdir()
+
+    apps = bench.apps()
+    assert len(apps) == 1
+    assert apps[0].config.name == "testapp"
+
+
+def test_bench_apps_ignores_non_git_directories(tmp_path: Path) -> None:
+    bench = make_bench(tmp_path)
+    bench.create_directories()
+    (tmp_path / "apps" / "notapp").mkdir()  # no .git
+
+    apps = bench.apps()
+    assert apps == []
+
+
+def test_bench_sites_scans_filesystem(tmp_path: Path) -> None:
+    """bench.sites() discovers sites from sites/ directory."""
+    bench = make_bench(tmp_path)
+    bench.create_directories()
+
+    site_dir = tmp_path / "sites" / "site1.localhost"
+    site_dir.mkdir()
+    (site_dir / "site_config.json").write_text("{}")
+
+    sites = bench.sites()
+    assert len(sites) == 1
+    assert sites[0].config.name == "site1.localhost"
+
+
+def test_bench_init_apps_comes_from_config(tmp_path: Path) -> None:
+    """bench.init_apps() returns apps from bench.toml (used during bench init)."""
+    bench = make_bench(tmp_path)
+    init_apps = bench.init_apps()
+    assert len(init_apps) == 1
+    assert init_apps[0].config.name == "frappe"
+
+
 # ── ProcessManager tests ─────────────────────────────────────────────────────
 
 
 def test_process_definitions_returns_correct_count(tmp_path: Path) -> None:
     bench = make_bench(tmp_path)
     # workers: default=2, short=1, long=1 => 4 worker processes
-    # plus web, socketio, redis_cache, redis_queue, redis_socketio, admin = 6
-    # total = 10
+    # plus web, socketio, redis_cache, redis_queue, redis_socketio = 5
+    # total = 9
     process_manager = HonchoProcessManager(bench)
     definitions = process_manager._process_definitions()
-    assert len(definitions) == 10
+    assert len(definitions) == 9
 
 
 def test_process_definitions_worker_names_are_numbered(tmp_path: Path) -> None:
@@ -190,50 +230,34 @@ def test_honcho_generate_config_procfile_format(tmp_path: Path) -> None:
         assert ": " in line, f"Line missing ': ' separator: {line!r}"
 
 
-# ── SupervisorProcessManager tests ──────────────────────────────────────────
+def test_honcho_start_writes_per_process_pid_files(tmp_path: Path) -> None:
+    """Each spawned process gets its own pids/<name>.pid file."""
+    import subprocess
+    from unittest.mock import MagicMock, patch
 
-
-def test_supervisor_generate_config_writes_supervisor_conf(tmp_path: Path) -> None:
-    bench = make_bench(tmp_path, process_manager="supervisor")
+    bench = make_bench(tmp_path)
     bench.create_directories()
-    process_manager = SupervisorProcessManager(bench)
+    process_manager = HonchoProcessManager(bench)
     process_manager.generate_config()
 
-    supervisor_conf = tmp_path / "config" / "supervisor.conf"
-    assert supervisor_conf.exists()
+    fake_proc = MagicMock()
+    fake_proc.pid = 12345
+    fake_proc.stdout = iter([])
+    fake_proc.poll.return_value = None
+    fake_proc.wait.return_value = 0
 
+    def fake_popen(cmd, **kwargs):
+        return fake_proc
 
-def test_supervisor_generate_config_contains_env_bench_root_placeholder(tmp_path: Path) -> None:
-    bench = make_bench(tmp_path, process_manager="supervisor")
-    bench.create_directories()
-    process_manager = SupervisorProcessManager(bench)
-    process_manager.generate_config()
+    with patch("bench_cli.managers.honcho_process_manager.subprocess.Popen", side_effect=fake_popen):
+        with patch.object(process_manager, "_stop_all"):
+            entries = process_manager._parse_procfile()
+            for name, command in entries:
+                proc = fake_popen(command)
+                process_manager._procs[name] = proc
+                (bench.pids_path / f"{name}.pid").write_text(str(proc.pid))
 
-    supervisor_conf = tmp_path / "config" / "supervisor.conf"
-    content = supervisor_conf.read_text()
-    assert "%(ENV_BENCH_ROOT)s" in content
-
-
-def test_supervisor_generate_config_contains_all_programs(tmp_path: Path) -> None:
-    bench = make_bench(tmp_path, process_manager="supervisor")
-    bench.create_directories()
-    process_manager = SupervisorProcessManager(bench)
-    process_manager.generate_config()
-
-    supervisor_conf = tmp_path / "config" / "supervisor.conf"
-    content = supervisor_conf.read_text()
-    assert "[program:web]" in content
-    assert "[program:worker_default_1]" in content
-    assert "[program:redis_cache]" in content
-
-
-def test_supervisor_socket_path(tmp_path: Path) -> None:
-    bench = make_bench(tmp_path, process_manager="supervisor")
-    process_manager = SupervisorProcessManager(bench)
-    assert process_manager.socket_path == tmp_path / "pids" / "supervisor.sock"
-
-
-def test_supervisor_conf_path(tmp_path: Path) -> None:
-    bench = make_bench(tmp_path, process_manager="supervisor")
-    process_manager = SupervisorProcessManager(bench)
-    assert process_manager.conf_path == tmp_path / "config" / "supervisor.conf"
+    for name in process_manager._procs:
+        pid_file = bench.pids_path / f"{name}.pid"
+        assert pid_file.exists(), f"Missing PID file for process '{name}'"
+        assert pid_file.read_text().strip() == "12345"

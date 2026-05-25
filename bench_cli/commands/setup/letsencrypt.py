@@ -27,5 +27,5 @@ class SetupLetsEncryptCommand:
     def _validate_email_set(self) -> None:
         if not self.bench.config.letsencrypt.email:
             raise ConfigError(
-                "letsencrypt.email must be set in bench.yml to run setup letsencrypt."
+                "letsencrypt.email must be set in bench.toml to run setup letsencrypt."
             )

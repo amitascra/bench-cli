@@ -54,9 +54,9 @@ class LetsEncryptManager:
         ])
 
     def obtain_all(self) -> None:
-        for site in self.bench.config.sites:
-            if site.ssl:
-                self.obtain(site)
+        for site in self.bench.sites():
+            if site.config.ssl:
+                self.obtain(site.config)
 
     def renew(self) -> None:
         run_command(["certbot", "renew", "--quiet"])

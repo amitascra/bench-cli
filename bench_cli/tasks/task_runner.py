@@ -24,7 +24,6 @@ _WHITELIST: dict[str, list[str]] = {
     "backup-site": ["site"],
     "build": [],        # optional: app
     "update": [],
-    "reload-supervisor": [],
     "switch-branch": ["name", "branch"],
 }
 
@@ -92,7 +91,6 @@ class TaskRunner:
                 raise ValueError(f"Command {command!r} requires arg {key!r}")
 
         bench_bin = str(self._bench_root / "env" / "bin" / "bench")
-        supervisor_conf = str(self._bench_root / "config" / "supervisor.conf")
 
         if command == "migrate":
             return [bench_bin, "frappe", "--site", args["site"], "migrate"]
@@ -127,8 +125,6 @@ class TaskRunner:
             return cmd
         if command == "update":
             return [sys.executable, "-m", "bench_cli.tasks.update_task", str(self._bench_root)]
-        if command == "reload-supervisor":
-            return ["supervisorctl", "-c", supervisor_conf, "reload"]
         if command == "switch-branch":
             return [sys.executable, "-m", "bench_cli.tasks.switch_branch_task",
                     str(self._bench_root), args["name"], args["branch"]]

@@ -4,7 +4,6 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-import yaml
 from flask import Blueprint, current_app, jsonify, request
 
 from ..readers.app_reader import AppReader
@@ -41,43 +40,22 @@ def add():
     name = (data.get("name") or "").strip()
     repo = (data.get("repo") or "").strip()
     branch = (data.get("branch") or "").strip()
-    branches = [b.strip() for b in data.get("branches") or [] if str(b).strip()]
 
     if not name:
         return jsonify({"ok": False, "error": "App name is required."})
     if not repo:
         return jsonify({"ok": False, "error": "Repository URL is required."})
 
-    bench_yml = bench_root / "bench.yml"
-    try:
-        cfg = yaml.safe_load(bench_yml.read_text()) or {}
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Could not read bench.yml: {e}"})
-
-    existing = [a.get("name") for a in cfg.get("apps", [])]
-    if name in existing:
-        return jsonify({"ok": False, "error": f"'{name}' is already in bench.yml."})
-
-    entry: dict = {"name": name, "repo": repo}
-    if branch:
-        entry["branch"] = branch
-    if branches:
-        entry["branches"] = branches
-    cfg.setdefault("apps", []).append(entry)
-
-    try:
-        bench_yml.write_text(
-            yaml.dump(cfg, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        )
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Could not write bench.yml: {e}"})
+    # Check app isn't already cloned
+    if (bench_root / "apps" / name / ".git").exists():
+        return jsonify({"ok": False, "error": f"'{name}' is already installed."})
 
     try:
         task_id = TaskRunner(bench_root).run(
             "get-app", {"name": name, "repo": repo, "branch": branch}
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": f"App added but could not start get-app: {e}"})
+        return jsonify({"ok": False, "error": f"Could not start get-app: {e}"})
 
     return jsonify({"ok": True, "task_id": task_id})
 
@@ -91,15 +69,9 @@ def switch_branch(name: str):
     if not branch:
         return jsonify({"ok": False, "error": "branch is required."})
 
-    bench_yml = bench_root / "bench.yml"
-    try:
-        cfg = yaml.safe_load(bench_yml.read_text()) or {}
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Could not read bench.yml: {e}"})
-
-    app_names = [a.get("name") for a in cfg.get("apps", [])]
-    if name not in app_names:
-        return jsonify({"ok": False, "error": f"App '{name}' not found in bench.yml."})
+    # Verify app is cloned
+    if not (bench_root / "apps" / name / ".git").exists():
+        return jsonify({"ok": False, "error": f"App '{name}' is not installed."})
 
     try:
         task_id = TaskRunner(bench_root).run(

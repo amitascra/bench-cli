@@ -1,0 +1,87 @@
+"""Tests for bench_cli.utils — write_toml serialiser."""
+from __future__ import annotations
+
+import tomllib
+from pathlib import Path
+
+import pytest
+
+from bench_cli.utils import write_toml
+
+
+def _roundtrip(tmp_path: Path, data: dict) -> dict:
+    path = tmp_path / "out.toml"
+    write_toml(path, data)
+    with path.open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def test_write_toml_scalars(tmp_path: Path) -> None:
+    data = {"bench": {"name": "my-bench", "python": "3.14"}}
+    result = _roundtrip(tmp_path, data)
+    assert result["bench"]["name"] == "my-bench"
+    assert result["bench"]["python"] == "3.14"
+
+
+def test_write_toml_integer(tmp_path: Path) -> None:
+    data = {"redis": {"cache_port": 13000}}
+    result = _roundtrip(tmp_path, data)
+    assert result["redis"]["cache_port"] == 13000
+
+
+def test_write_toml_boolean(tmp_path: Path) -> None:
+    data = {"admin": {"enabled": True}}
+    result = _roundtrip(tmp_path, data)
+    assert result["admin"]["enabled"] is True
+
+
+def test_write_toml_list_of_strings(tmp_path: Path) -> None:
+    data = {"sites": [{"name": "s1.localhost", "apps": ["frappe", "erpnext"]}]}
+    result = _roundtrip(tmp_path, data)
+    assert result["sites"][0]["apps"] == ["frappe", "erpnext"]
+
+
+def test_write_toml_array_of_tables(tmp_path: Path) -> None:
+    data = {
+        "apps": [
+            {"name": "frappe", "repo": "https://github.com/frappe/frappe", "branch": "v16"},
+            {"name": "erpnext", "repo": "https://github.com/frappe/erpnext", "branch": "v16"},
+        ]
+    }
+    result = _roundtrip(tmp_path, data)
+    assert len(result["apps"]) == 2
+    assert result["apps"][0]["name"] == "frappe"
+    assert result["apps"][1]["name"] == "erpnext"
+
+
+def test_write_toml_preserves_new_app(tmp_path: Path) -> None:
+    """Simulates get-app appending an entry to bench.toml."""
+    original = {
+        "bench": {"name": "test-bench", "python": "3.14"},
+        "apps": [{"name": "frappe", "repo": "https://github.com/frappe/frappe", "branch": "v16"}],
+        "sites": [{"name": "site1.localhost", "apps": ["frappe"]}],
+        "mariadb": {"root_password": "root"},
+        "redis": {"cache_port": 13000, "queue_port": 11000, "socketio_port": 12000},
+    }
+    original["apps"].append(
+        {"name": "payments", "repo": "https://github.com/frappe/payments", "branch": "v16"}
+    )
+    result = _roundtrip(tmp_path, original)
+    names = [a["name"] for a in result["apps"]]
+    assert "frappe" in names
+    assert "payments" in names
+
+
+def test_write_toml_file_is_valid_toml(tmp_path: Path) -> None:
+    data = {
+        "bench": {"name": "x", "python": "3.14"},
+        "apps": [{"name": "frappe", "repo": "https://r.co/frappe", "branch": "main"}],
+        "sites": [{"name": "s.localhost", "apps": ["frappe"]}],
+        "mariadb": {"root_password": "r"},
+        "redis": {"cache_port": 13000, "queue_port": 11000, "socketio_port": 12000},
+    }
+    path = tmp_path / "bench.toml"
+    write_toml(path, data)
+    # If tomllib.load raises, the file is invalid TOML.
+    with path.open("rb") as fh:
+        tomllib.load(fh)

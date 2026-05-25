@@ -98,14 +98,6 @@ def test_build_argv_update(tmp_path: Path) -> None:
     assert str(tmp_path) in argv
 
 
-def test_build_argv_reload_supervisor(tmp_path: Path) -> None:
-    runner = TaskRunner(tmp_path)
-    argv = runner._build_argv("reload-supervisor", {})
-    supervisor_conf = str(tmp_path / "config" / "supervisor.conf")
-    assert argv == ["supervisorctl", "-c", supervisor_conf, "reload"]
-    assert Path(supervisor_conf).is_absolute()
-
-
 def test_build_argv_switch_branch(tmp_path: Path) -> None:
     runner = TaskRunner(tmp_path)
     argv = runner._build_argv("switch-branch", {"name": "gameplan", "branch": "develop"})

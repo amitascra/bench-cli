@@ -1,8 +1,9 @@
 """
-Drops a Frappe site and removes it from bench.yml.
+Drops a Frappe site and removes it from bench.toml.
 Invoked as: python -m bench_cli.tasks.drop_site_task <bench_root> <site_name>
 """
 import sys
+import tomllib
 from pathlib import Path
 
 
@@ -20,7 +21,7 @@ def main() -> None:
     from bench_cli.core.bench import Bench
     from bench_cli.utils import run_command
 
-    cfg = BenchConfig.from_file(bench_root / "bench.yml")
+    cfg = BenchConfig.from_file(bench_root / "bench.toml")
     bench = Bench(cfg, bench_root)
     bench_bin = str(bench.env_path / "bin" / "bench")
     mariadb = cfg.mariadb
@@ -34,13 +35,15 @@ def main() -> None:
 
     run_command(cmd, cwd=bench.sites_path, stream_output=True)
 
-    import yaml
-    bench_yml = bench_root / "bench.yml"
-    raw = yaml.safe_load(bench_yml.read_text()) or {}
+    bench_toml = bench_root / "bench.toml"
+    with bench_toml.open("rb") as fh:
+        raw = tomllib.load(fh)
     raw["sites"] = [s for s in raw.get("sites", []) if s.get("name") != args.site_name]
-    bench_yml.write_text(yaml.dump(raw, default_flow_style=False, allow_unicode=True, sort_keys=False))
 
-    print(f"\nSite '{args.site_name}' dropped and removed from bench.yml.")
+    from bench_cli.utils import write_toml
+    write_toml(bench_toml, raw)
+
+    print(f"\nSite '{args.site_name}' dropped and removed from bench.toml.")
 
 
 if __name__ == "__main__":

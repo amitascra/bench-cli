@@ -18,8 +18,13 @@ def main() -> None:
 
     from bench_cli.config.bench_config import BenchConfig
 
-    cfg = BenchConfig.from_file(bench_root / "bench.yml")
-    pip = str(bench_root / "env" / "bin" / "pip")
+    cfg = BenchConfig.from_file(bench_root / "bench.toml")
+    python = str(bench_root / "env" / "bin" / "python")
+
+    from bench_cli.managers.python_env_manager import PythonEnvManager
+    from bench_cli.core.bench import Bench
+    bench = Bench(cfg, bench_root)
+    uv = PythonEnvManager(bench)._ensure_uv()
 
     for app in cfg.apps:
         app_path = bench_root / "apps" / app.name
@@ -34,7 +39,7 @@ def main() -> None:
 
         print(f"Reinstalling {app.name}...")
         sys.stdout.flush()
-        subprocess.run([pip, "install", "-e", str(app_path)], check=False)
+        subprocess.run([uv, "pip", "install", "--python", python, "-e", str(app_path)], check=False)
 
     print("\nUpdate complete.")
 

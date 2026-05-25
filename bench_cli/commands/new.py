@@ -1,62 +1,68 @@
 from pathlib import Path
 
-import click
-
 from bench_cli.exceptions import BenchError
 
-_BENCH_YML_TEMPLATE = """\
-bench:
-  name: frappe-bench
-  python: "3.14"
-  process_manager: honcho
+_BENCH_TOML_TEMPLATE = """\
+[bench]
+name = "{name}"
+python = "3.14"
 
-apps:
-  - name: frappe
-    repo: https://github.com/frappe/frappe
-    branch: version-16
+[[apps]]
+name = "frappe"
+repo = "https://github.com/frappe/frappe"
+branch = "version-16"
 
-sites:
-  - name: site1.localhost
-    default: true        # serve this site when no Host header matches
-    apps:
-      - frappe
+[mariadb]
+host = "localhost"
+port = 3306
+root_password = "root"
+# version = "10.6"
 
-mariadb:
-  host: localhost
-  port: 3306
-  root_password: "root"
-  # version: "10.6"
+[redis]
+port = 13000
+# or use separate ports:
+# cache_port = 13000
+# queue_port = 11000
+# socketio_port = 12000
 
-redis:
-  port: 13000             # single Redis instance for all services
-  # or use separate ports:
-  # cache_port: 13000
-  # queue_port: 11000
-  # socketio_port: 12000
+[workers]
+default = 2
+short = 1
+long = 1
 
-workers:
-  default: 2
-  short: 1
-  long: 1
-
-admin:
-  port: 8002
-  enabled: false        # set to true to enable the admin UI
-  timeout: 180          # seconds of inactivity before the admin UI auto-stops (standalone mode only)
+[admin]
+port = 8002
+enabled = false
+timeout = 180
 """
 
 
 class NewCommand:
-    def __init__(self, target_directory: Path) -> None:
+    def __init__(self, target_directory: Path, name: str) -> None:
         self.target_directory = target_directory
+        self.name = name
 
     def run(self) -> None:
-        bench_yml = self.target_directory / "bench.yml"
-        if bench_yml.exists():
+        bench_toml = self.target_directory / "bench.toml"
+        if bench_toml.exists():
             raise BenchError(
-                f"bench.yml already exists at {bench_yml}. "
-                "Remove it or run this command in a different directory."
+                f"A bench named '{self.name}' already exists at {self.target_directory}. "
+                "Choose a different name or remove the existing bench."
             )
-        bench_yml.write_text(_BENCH_YML_TEMPLATE)
-        click.echo(f"Created bench.yml at {bench_yml}")
-        click.echo("Edit it to configure your bench, then run: bench init")
+
+        benches_dir = self.target_directory.parent
+        if not benches_dir.exists():
+            print(f"Creating benches directory at {benches_dir}")
+            benches_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"Creating bench directory: {self.target_directory}")
+        self.target_directory.mkdir(parents=True, exist_ok=True)
+
+        print("Writing bench.toml")
+        bench_toml.write_text(_BENCH_TOML_TEMPLATE.format(name=self.name))
+
+        print(f"\nBench '{self.name}' created at {self.target_directory}")
+        print(f"\nNext steps:")
+        print(f"  1. Edit the config:  {bench_toml}")
+        print(f"  2. Run:              bench init")
+        print(f"  3. Create a site:    bench new-site site1.localhost")

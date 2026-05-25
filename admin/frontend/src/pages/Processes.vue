@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { Badge, ListView, Button, LoadingText, ErrorMessage } from 'frappe-ui'
 
 const processes = ref([])
-const processManager = ref('')
 const loading = ref(true)
 const error = ref('')
 const paused = ref(false)
@@ -35,7 +34,6 @@ async function load() {
     if (!res.ok) throw new Error(`${res.status}`)
     const d = await res.json()
     processes.value = d.processes
-    processManager.value = d.process_manager
   } catch (e) {
     error.value = e.message
   } finally {
@@ -86,9 +84,6 @@ onUnmounted(() => clearInterval(timer))
           <span v-else>{{ item || '—' }}</span>
         </template>
       </ListView>
-      <p v-if="processManager === 'supervisor'" class="mt-3 text-sm text-ink-gray-5">
-        Manage via <code>supervisorctl -c config/supervisor.conf</code>
-      </p>
     </div>
   </div>
 </template>

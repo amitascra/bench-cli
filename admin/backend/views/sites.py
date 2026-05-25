@@ -4,9 +4,9 @@ import copy
 from dataclasses import asdict
 from pathlib import Path
 
-import yaml
 from flask import Blueprint, current_app, jsonify, request
 
+from ..readers.app_reader import AppReader
 from ..readers.site_reader import SiteReader
 from bench_cli.tasks.task_runner import TaskRunner
 
@@ -31,10 +31,10 @@ def detail(name: str):
     except Exception as error:
         return jsonify({"error": str(error)}), 500
 
+    # Installable = apps that are cloned but not yet installed on this site
     try:
-        from bench_cli.config.bench_config import BenchConfig
-        cfg = BenchConfig.from_file(bench_root / "bench.yml")
-        installable = [a.name for a in cfg.apps if a.name not in site.installed_apps]
+        all_apps = [a.name for a in AppReader(bench_root).read_all()]
+        installable = [a for a in all_apps if a not in site.installed_apps]
     except Exception:
         installable = []
 
@@ -53,37 +53,16 @@ def create():
     if not name:
         return jsonify({"ok": False, "error": "Site name is required."})
 
-    bench_yml = bench_root / "bench.yml"
-    try:
-        cfg = yaml.safe_load(bench_yml.read_text()) or {}
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Could not read bench.yml: {e}"})
-
-    existing = [s.get("name") for s in cfg.get("sites", [])]
-    if name in existing:
-        return jsonify({"ok": False, "error": f"'{name}' is already in bench.yml."})
-
-    apps = cfg.get("apps", [])
-    framework_app = apps[0].get("name") if apps else "frappe"
-    cfg.setdefault("sites", []).append({
-        "name": name,
-        "apps": [framework_app],
-        "admin_password": admin_password,
-    })
-
-    try:
-        bench_yml.write_text(
-            yaml.dump(cfg, default_flow_style=False, allow_unicode=True, sort_keys=False)
-        )
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Could not write bench.yml: {e}"})
+    # Check site doesn't already exist
+    if (bench_root / "sites" / name / "site_config.json").exists():
+        return jsonify({"ok": False, "error": f"Site '{name}' already exists."})
 
     try:
         task_id = TaskRunner(bench_root).run(
             "new-site", {"name": name, "admin_password": admin_password}
         )
     except Exception as e:
-        return jsonify({"ok": False, "error": f"Site added but could not start new-site: {e}"})
+        return jsonify({"ok": False, "error": f"Could not start new-site: {e}"})
 
     return jsonify({"ok": True, "task_id": task_id})
 

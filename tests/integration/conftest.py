@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 # Can be overridden in CI: BENCH_TEST_ROOT=/tmp/ci-bench pytest tests/integration/
-_DEFAULT_BENCH_ROOT = Path(__file__).parent.parent.parent / "test-bench"
+_DEFAULT_BENCH_ROOT = Path(__file__).parent.parent.parent / "benches" / "test-bench"
 BENCH_TEST_ROOT = Path(os.environ.get("BENCH_TEST_ROOT", _DEFAULT_BENCH_ROOT))
 
 
@@ -21,9 +21,9 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def bench_root() -> Path:
-    if not (BENCH_TEST_ROOT / "bench.yml").exists():
+    if not (BENCH_TEST_ROOT / "bench.toml").exists():
         pytest.skip(
-            f"No bench.yml at {BENCH_TEST_ROOT}. "
+            f"No bench.toml at {BENCH_TEST_ROOT}. "
             "Run 'bench init' inside that directory first, or set BENCH_TEST_ROOT."
         )
     if not (BENCH_TEST_ROOT / "env" / "bin" / "bench").exists():

@@ -25,7 +25,7 @@ def main() -> None:
     app = create_app(bench_root)
 
     try:
-        cfg = BenchConfig.from_file(bench_root / "bench.yml")
+        cfg = BenchConfig.from_file(bench_root / "bench.toml")
         admin_enabled = cfg.admin.enabled
     except Exception:
         admin_enabled = False

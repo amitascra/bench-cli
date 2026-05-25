@@ -29,7 +29,7 @@ def create_app(bench_root: Path) -> Flask:
         if request.path == "/api/status":
             return None
         try:
-            config = BenchConfig.from_file(bench_root / "bench.yml")
+            config = BenchConfig.from_file(bench_root / "bench.toml")
             if not config.admin.enabled:
                 return jsonify({"error": "Admin is disabled", "enabled": False}), 503
         except Exception as exc:
@@ -38,7 +38,7 @@ def create_app(bench_root: Path) -> Flask:
     @app.route("/api/status")
     def api_status():
         try:
-            config = BenchConfig.from_file(bench_root / "bench.yml")
+            config = BenchConfig.from_file(bench_root / "bench.toml")
             return jsonify({"enabled": config.admin.enabled, "name": config.name})
         except Exception as exc:
             return jsonify({"enabled": False, "error": str(exc)}), 503

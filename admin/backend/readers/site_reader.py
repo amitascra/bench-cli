@@ -5,8 +5,6 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from bench_cli.config.bench_config import BenchConfig
-
 
 @dataclass
 class SiteInfo:
@@ -23,8 +21,14 @@ class SiteReader:
         self._bench_root = bench_root
 
     def read_all(self) -> list[SiteInfo]:
-        config = BenchConfig.from_file(self._bench_root / "bench.yml")
-        return [self._read_site(site.name) for site in config.sites]
+        sites_path = self._bench_root / "sites"
+        if not sites_path.is_dir():
+            return []
+        return [
+            self._read_site(d.name)
+            for d in sorted(sites_path.iterdir())
+            if d.is_dir() and (d / "site_config.json").exists()
+        ]
 
     def read_one(self, site_name: str) -> SiteInfo:
         return self._read_site(site_name)

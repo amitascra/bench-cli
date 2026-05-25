@@ -26,7 +26,7 @@ class SetupNginxCommand:
     def _validate_nginx_enabled(self) -> None:
         if not self.bench.config.nginx.enabled:
             raise ConfigError(
-                "nginx.enabled must be true in bench.yml to run setup nginx."
+                "nginx.enabled must be true in bench.toml to run setup nginx."
             )
 
     def _ensure_nginx_config_directory(self) -> None:
@@ -34,10 +34,10 @@ class SetupNginxCommand:
         nginx_dir.mkdir(parents=True, exist_ok=True)
 
     def _print_site_urls(self) -> None:
-        for site in self.bench.config.sites:
-            if site.ssl and self.nginx_manager.cert_exists(site):
-                print(f"  https://{site.name}")
+        for site in self.bench.sites():
+            if site.config.ssl and self.nginx_manager.cert_exists(site.config):
+                print(f"  https://{site.config.name}")
             else:
                 http_port = self.bench.config.nginx.http_port
                 port_suffix = "" if http_port == 80 else f":{http_port}"
-                print(f"  http://{site.name}{port_suffix}")
+                print(f"  http://{site.config.name}{port_suffix}")

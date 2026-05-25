@@ -6,20 +6,19 @@
 
 ```
 bench_cli/
-├── bench.yml                    # user's config (not part of the package)
-│
-├── setup.py                     # or pyproject.toml — installs the `bench` CLI entry point
+├── pyproject.toml               # installs the `bench` CLI entry point
 │
 └── bench_cli/                         # Python package
     ├── __init__.py
-    ├── cli.py                   # Click entry point — wires commands to classes
+    ├── cli.py                   # argparse entry point — wires commands to classes
     ├── platform.py              # OS detection and system package manager abstraction
+    ├── utils.py                 # write_toml — stdlib TOML serialiser
     │
-    ├── config/                  # Data classes that model bench.yml
+    ├── config/                  # Data classes that model bench.toml
     │   ├── __init__.py
     │   ├── bench_config.py      # BenchConfig — top-level config object
     │   ├── app_config.py        # AppConfig
-    │   ├── site_config.py       # SiteConfig (now includes domains, ssl)
+    │   ├── site_config.py       # SiteConfig (includes domains, ssl)
     │   ├── mariadb_config.py    # MariaDBConfig
     │   ├── redis_config.py      # RedisConfig
     │   ├── worker_config.py     # WorkerConfig
@@ -37,17 +36,15 @@ bench_cli/
     │   ├── mariadb_manager.py        # MariaDBManager
     │   ├── redis_manager.py          # RedisManager
     │   ├── python_env_manager.py     # PythonEnvManager
-    │   ├── process_manager.py        # ProcessManager (abstract base)
-    │   ├── honcho_process_manager.py # HonchoProcessManager — dev, foreground
-    │   ├── supervisor_process_manager.py  # SupervisorProcessManager — production
+    │   ├── process_manager.py        # HonchoProcessManager — built-in Procfile runner
     │   ├── nginx_manager.py          # NginxManager — config generation and reload
     │   └── letsencrypt_manager.py    # LetsEncryptManager — cert obtain and renew
     │
     ├── commands/                # One class per CLI command
     │   ├── __init__.py
-    │   ├── new.py               # NewCommand     — scaffold a starter bench.yml
-    │   ├── init.py              # InitCommand    — install deps, clone apps, create sites
-    │   ├── run.py               # RunCommand
+    │   ├── new.py               # NewCommand     — scaffold a starter bench.toml
+    │   ├── init.py              # InitCommand    — install deps, clone framework app
+    │   ├── start.py             # StartCommand   — run Procfile processes in foreground
     │   ├── build.py             # BuildCommand
     │   ├── update.py            # UpdateCommand
     │   └── setup/
@@ -75,35 +72,37 @@ bench_cli/
 ## Bench directory layout (what gets created on disk)
 
 ```
-<bench-root>/               # wherever the user ran bench init
-├── bench.yml               # user's config
-├── apps/                   # git-cloned app source trees
-│   ├── frappe/
-│   └── erpnext/
-├── sites/                  # site data directories
-│   ├── assets/             # built JS/CSS assets served by the web process
-│   └── site1.localhost/
-│       ├── site_config.json
-│       ├── private/
-│       └── public/
-├── env/                    # shared Python virtualenv
-├── logs/                   # per-process log files
-│   ├── web.log
-│   ├── worker.default.1.log
-│   └── ...
-├── config/                 # generated service config files
-│   ├── redis_cache.conf
-│   ├── redis_queue.conf
-│   ├── redis_socketio.conf
-│   ├── Procfile            # written when process_manager = honcho
-│   ├── supervisor.conf     # written when process_manager = supervisor
-│   └── nginx/              # written by bench setup nginx (nginx.enabled = true)
-│       ├── include.conf    # single include directive — symlinked into nginx config_dir
-│       ├── site1.example.com.conf
-│       └── site2.example.com.conf
-├── pids/                   # PID files and supervisor socket
-│   └── supervisor.sock     # supervisor-only: unix socket for supervisorctl
-└── tasks/                  # one sub-directory per admin-triggered task
+bench-cli/
+└── benches/
+    └── my-bench/               # bench root — all benches under benches/<name>/
+        ├── bench.toml          # infra config (python, db, redis, workers)
+        ├── apps/               # git-cloned app source trees
+        │   ├── frappe/
+        │   └── erpnext/
+        ├── sites/              # site data directories
+        │   ├── assets/         # built JS/CSS assets served by the web process
+        │   ├── apps.txt        # installed app list read by frappe
+        │   ├── common_site_config.json
+        │   └── site1.localhost/
+        │       ├── site_config.json
+        │       ├── private/
+        │       └── public/
+        ├── env/                # shared Python virtualenv (managed by uv)
+        ├── logs/               # per-process log files
+        │   ├── web.log
+        │   ├── worker.default.1.log
+        │   └── ...
+        ├── config/             # generated service config files
+        │   ├── redis_cache.conf
+        │   ├── redis_queue.conf
+        │   ├── redis_socketio.conf
+        │   ├── Procfile        # built-in process runner input
+        │   └── nginx/          # written by bench setup nginx (nginx.enabled = true)
+        │       ├── include.conf    # single include directive — symlinked into nginx config_dir
+        │       ├── site1.example.com.conf
+        │       └── site2.example.com.conf
+        ├── pids/               # PID files (bench.pid, per-process <name>.pid)
+        └── tasks/              # one sub-directory per admin-triggered task
     └── 20250521-143022-a1b2c3/
         ├── meta.json       # command, args, started_at, finished_at, exit_code
         ├── pid             # integer PID of the forked child
@@ -115,7 +114,7 @@ bench_cli/
 
 ## Config layer (`bench_cli/config/`)
 
-Config classes are pure data holders. They are constructed by parsing `bench.yml` and expose no side effects. They are the only objects that know the shape of the YAML file.
+Config classes are pure data holders. They are constructed by parsing `bench.toml` (via `tomllib` from the Python 3.11+ stdlib) and expose no side effects. They are the only objects that know the shape of the TOML file.
 
 ### `BenchConfig`
 
@@ -124,9 +123,7 @@ Config classes are pure data holders. They are constructed by parsing `bench.yml
 class BenchConfig:
     name: str
     python_version: str
-    process_manager: str        # 'honcho' or 'supervisor'
-    apps: List[AppConfig]
-    sites: List[SiteConfig]
+    apps: List[AppConfig]       # framework app(s) to clone on bench init
     mariadb: MariaDBConfig
     redis: RedisConfig
     workers: WorkerConfig
@@ -135,18 +132,17 @@ class BenchConfig:
 
     @classmethod
     def from_file(cls, path: Path) -> 'BenchConfig':
-        """Load and validate bench.yml. Raises ConfigError on any violation."""
+        """Load and validate bench.toml. Raises ConfigError on any violation."""
 
     def validate(self) -> None:
         """Run all validation rules defined in config.md. Raises ConfigError."""
 
-    def app_by_name(self, name: str) -> AppConfig:
-        """Return the AppConfig with the given name. Raises KeyError if not found."""
-
     @property
     def framework_app(self) -> AppConfig:
-        """The first app in the list, treated as the Frappe framework."""
+        """The first app in the list (or a default frappe AppConfig if none listed)."""
 ```
+
+`apps` is used only during `bench init` to clone the framework app. After init, apps are discovered from the filesystem via `Bench.apps()`. Sites are never stored in `BenchConfig` — `Bench.sites()` always scans the filesystem.
 
 ### `AppConfig`
 
@@ -235,9 +231,10 @@ class Bench:
     @property
     def pip(self) -> Path: ...            # <root>/env/bin/pip
 
-    # Domain object accessors
-    def apps(self) -> List[App]: ...      # one App per entry in config.apps
-    def sites(self) -> List[Site]: ...    # one Site per entry in config.sites
+    # Domain object accessors (both scan the filesystem, not bench.toml)
+    def apps(self) -> List[App]: ...       # scans apps/ for dirs with .git
+    def init_apps(self) -> List[App]: ... # reads bench.toml [[apps]] — used only during bench init
+    def sites(self) -> List[Site]: ...    # scans sites/ for dirs with site_config.json
 
     def create_directories(self) -> None:
         """Create apps/, sites/, logs/, config/, pids/ if they do not exist."""
@@ -363,7 +360,7 @@ class RedisManager:
 
 ### `PythonEnvManager`
 
-All apps share a single virtualenv at `env/`. This is intentional: every app listed in `bench.yml` can be installed on any site in the bench. Because Frappe loads all installed apps into the same Python process, they must all live in the same environment. Dependency conflicts between apps are resolved at the app level, not by isolating environments.
+All apps share a single virtualenv at `env/`. This is intentional: every app installed in the bench can be installed on any site. Because Frappe loads all installed apps into the same Python process, they must all live in the same environment. Dependency conflicts between apps are resolved at the app level, not by isolating environments.
 
 ```python
 class PythonEnvManager:
@@ -378,7 +375,7 @@ class PythonEnvManager:
         """
 
     def create_venv(self) -> None:
-        """python -m venv bench.env_path if it does not already exist."""
+        """uv venv --python <version> bench.env_path if it does not already exist. uv is auto-installed."""
 
     def install_app(self, app: App) -> None:
         """pip install -e app.path using bench.pip."""
@@ -392,36 +389,36 @@ class PythonEnvManager:
         """
 ```
 
-### `ProcessManager` (abstract base)
+### `HonchoProcessManager`
 
-`ProcessManager` defines the interface. The concrete implementation is chosen at runtime based on `bench.config.process_manager`.
+The built-in Procfile runner. No external process manager required.
 
 ```python
-class ProcessManager(ABC):
+class HonchoProcessManager:
     def __init__(self, bench: Bench): ...
 
-    @abstractmethod
     def generate_config(self) -> None:
-        """Write the process manager's config file(s) to bench.config_path."""
+        """Write config/Procfile from _process_definitions()."""
 
-    @abstractmethod
     def start(self) -> None:
-        """Start all bench processes."""
+        """
+        Read config/Procfile and spawn each process with subprocess.Popen.
+        A thread per process streams output to stdout with '<name> |' prefix
+        and writes to logs/<name>.log. Per-process PID files written to pids/<name>.pid.
+        Blocks until SIGINT/SIGTERM; sends SIGTERM to all children, then waits.
+        """
 
-    @abstractmethod
     def stop(self) -> None:
-        """Stop all bench processes."""
+        """Send SIGTERM to the process group via pids/bench.pid."""
 
-    @abstractmethod
     def is_running(self) -> bool:
-        """Return True if any managed process is currently running."""
+        """True if pids/bench.pid exists and the process is alive."""
 
     def _process_definitions(self) -> List[ProcessDefinition]:
         """
         Build the ordered list of processes from bench config:
           web, socketio, N×default worker, M×short worker, K×long worker,
-          redis_cache, redis_queue, redis_socketio.
-        Shared by both subclasses.
+          redis (single) or redis_cache/redis_queue/redis_socketio (multi).
         """
 ```
 
@@ -435,139 +432,24 @@ class ProcessDefinition:
     log_file: Path      # bench.logs_path / f"{name}.log"
 ```
 
-#### `HonchoProcessManager`
-
-Used when `process_manager: honcho`. Intended for development.
-
-```python
-class HonchoProcessManager(ProcessManager):
-
-    def generate_config(self) -> None:
-        """Write config/Procfile from _process_definitions()."""
-
-    def start(self) -> None:
-        """
-        Invoke honcho programmatically with config/Procfile.
-        Multiplexes stdout with '<name> |' prefix.
-        Each process also writes to logs/<name>.log.
-        Blocks until SIGINT/SIGTERM; sends SIGTERM to children, then SIGKILL after 5s.
-        """
-
-    def stop(self) -> None:
-        """Send SIGTERM to the honcho process group (no-op if not running)."""
-
-    def is_running(self) -> bool:
-        """True if a honcho process started by this bench is alive."""
-```
-
-#### `SupervisorProcessManager`
-
-Used when `process_manager: supervisor`. Intended for production.
-
-```python
-class SupervisorProcessManager(ProcessManager):
-
-    @property
-    def socket_path(self) -> Path: ...     # bench.pids_path / "supervisor.sock"
-    @property
-    def conf_path(self) -> Path: ...       # bench.config_path / "supervisor.conf"
-
-    def generate_config(self) -> None:
-        """
-        Write config/supervisor.conf.
-        The file contains a [supervisord] section, [unix_http_server],
-        [supervisorctl], [rpcinterface:supervisor], and one [program:X]
-        section per ProcessDefinition.
-        """
-
-    def start(self) -> None:
-        """
-        If supervisord is not running: supervisord -c config/supervisor.conf
-        If supervisord is already running: supervisorctl -c config/supervisor.conf reload
-        Exits immediately (supervisord runs as a background daemon).
-        """
-
-    def stop(self) -> None:
-        """supervisorctl -c config/supervisor.conf shutdown"""
-
-    def is_running(self) -> bool:
-        """True if supervisor.sock exists and supervisord responds to a status ping."""
-
-    def status(self) -> str:
-        """supervisorctl -c config/supervisor.conf status  (returns raw output)."""
-```
-
-The generated `supervisor.conf` has this structure:
-
-```ini
-[unix_http_server]
-file=%(ENV_BENCH_ROOT)s/pids/supervisor.sock
-chmod=0700
-
-[supervisord]
-logfile=%(ENV_BENCH_ROOT)s/logs/supervisord.log
-logfile_maxbytes=50MB
-logfile_backups=10
-loglevel=info
-pidfile=%(ENV_BENCH_ROOT)s/pids/supervisord.pid
-nodaemon=false
-
-[rpcinterface:supervisor]
-supervisor.rpcinterface_factory=supervisor.rpcinterface:make_main_rpcinterface
-
-[supervisorctl]
-serverurl=unix://%(ENV_BENCH_ROOT)s/pids/supervisor.sock
-
-[program:web]
-command=%(ENV_BENCH_ROOT)s/env/bin/gunicorn -b 0.0.0.0:8000 -w 1 -t 120 frappe.app:application
-directory=%(ENV_BENCH_ROOT)s
-autostart=true
-autorestart=true
-stdout_logfile=%(ENV_BENCH_ROOT)s/logs/web.log
-stderr_logfile=%(ENV_BENCH_ROOT)s/logs/web.error.log
-
-[program:worker_default_1]
-command=%(ENV_BENCH_ROOT)s/env/bin/bench worker --queue default
-directory=%(ENV_BENCH_ROOT)s
-autostart=true
-autorestart=true
-stdout_logfile=%(ENV_BENCH_ROOT)s/logs/worker_default_1.log
-stderr_logfile=%(ENV_BENCH_ROOT)s/logs/worker_default_1.error.log
-
-; … one [program] block per ProcessDefinition …
-```
-
-`%(ENV_BENCH_ROOT)s` is resolved by supervisord from the environment variable `BENCH_ROOT`, which `bench run` sets before invoking supervisord. This keeps the config file portable (not hard-coded to a path).
-
-#### `ProcessManagerFactory`
-
-```python
-class ProcessManagerFactory:
-    @staticmethod
-    def create(bench: Bench) -> ProcessManager:
-        if bench.config.process_manager == 'supervisor':
-            return SupervisorProcessManager(bench)
-        return HonchoProcessManager(bench)
-```
-
 ---
 
 ## Commands layer (`bench_cli/commands/`)
 
-Each command class receives a `Bench` object and a logger. It orchestrates managers and core objects in the correct order. Commands are the only layer that produces user-visible console output.
+Each command class receives a `Bench` object. It orchestrates managers and core objects in the correct order. Commands are the only layer that produces user-visible console output.
 
 ```python
 class NewCommand:
-    def __init__(self, target_dir: Path): ...
-    def run(self) -> None: ...          # write a starter bench.yml; no other side effects
+    def __init__(self, bench_name: str): ...
+    def run(self) -> None: ...          # create benches/<name>/ and write bench.toml
 
 class InitCommand:
     def __init__(self, bench: Bench): ...
-    def run(self) -> None: ...          # full setup: deps, venv, apps, sites, config
+    def run(self) -> None: ...          # install deps, venv, clone framework app, generate Procfile
 
-class RunCommand:
+class StartCommand:
     def __init__(self, bench: Bench): ...
-    def run(self) -> None: ...
+    def run(self) -> None: ...          # start Procfile processes in foreground
 
 class BuildCommand:
     def __init__(self, bench: Bench): ...
@@ -575,54 +457,28 @@ class BuildCommand:
 
 class UpdateCommand:
     def __init__(self, bench: Bench): ...
-    def run(self) -> None: ...
+    def run(self) -> None: ...          # git pull all apps, reinstall, migrate all sites
 ```
 
 ---
 
 ## CLI entry point (`bench_cli/cli.py`)
 
-Built with [Click](https://click.palletsprojects.com/). Responsibilities:
-1. Find `bench.yml` (current directory, then parent directories up to `$HOME`).
-2. Parse and validate it into a `BenchConfig`.
+Built with `argparse` (stdlib). Zero Python dependencies. Responsibilities:
+1. Find the bench root — locate `bench.toml` by name under `benches/`, or use `-b/--bench NAME`.
+2. Parse and validate it into a `BenchConfig` via `tomllib` (stdlib).
 3. Construct a `Bench`.
 4. Instantiate and call the appropriate command class.
 
+Also handles `bench frappe ...` passthrough: unknown sub-commands are forwarded to `env/bin/bench` inside the active bench.
+
 ```python
-@click.group()
-def cli(): ...
-
-@cli.command()
-def new(): ...          # NewCommand(Path.cwd()).run() — scaffold bench.yml, then exit
-
-@cli.command()
-def init(): ...         # InitCommand(bench).run() — full setup
-
-@cli.command()
-def run(): ...          # RunCommand(bench).run()
-
-@cli.command()
-def build(): ...        # BuildCommand(bench).run()
-
-@cli.command()
-def update(): ...       # UpdateCommand(bench).run()
-
-@cli.command()
-@click.option('--port', default=8001)
-@click.option('--host', default='127.0.0.1')
-def admin(port, host): ...   # create_app(bench.path).run(host, port)
-
-@cli.group()
-def setup(): ...             # sub-command group for production setup
-
-@setup.command('nginx')
-def setup_nginx(): ...           # SetupNginxCommand(bench).run()
-
-@setup.command('letsencrypt')
-def setup_letsencrypt(): ...     # SetupLetsEncryptCommand(bench).run()
-
-@setup.command('production')
-def setup_production(): ...      # SetupProductionCommand(bench).run()
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-b', '--bench', ...)   # bench name under benches/
+    subparsers = parser.add_subparsers(dest='command')
+    # new, init, start, stop, get-app, new-site, build, update, update-config,
+    # admin, start-admin, stop-admin, setup nginx, setup letsencrypt, setup production
 ```
 
 ---
@@ -695,17 +551,19 @@ Factory function — returns `BrewPackageManager()` on macOS, `AptPackageManager
 
 ## Dependencies
 
-| Package | Purpose |
-|---------|---------|
-| `click` | CLI framework |
-| `pyyaml` | Parse `bench.yml` |
-| `PyMySQL` | Connect to MariaDB during `bench init` and in the admin's `DatabaseReader` |
-| `honcho` | Procfile-based process runner (`HonchoProcessManager`) |
-| `supervisor` | Daemon process manager (`SupervisorProcessManager`); also installs the `supervisord` and `supervisorctl` binaries |
-| `flask` | Admin web interface (`bench admin`) |
+bench-cli has **zero Python dependencies** — it uses only the Python 3.11+ standard library:
 
-All are pure Python and declared in `setup.py`. No system packages are required to install bench itself.
+| stdlib module | Purpose |
+|--------------|---------|
+| `tomllib` | Parse `bench.toml` |
+| `argparse` | CLI argument parsing |
+| `subprocess` | Spawn system commands (git, uv, mariadb, etc.) |
+| `threading` | Per-process output streaming in `HonchoProcessManager` |
+| `signal` | Handle SIGINT/SIGTERM for graceful shutdown |
+| `pathlib` | All filesystem path operations |
 
-`bench setup nginx` and `bench setup letsencrypt` additionally install the `nginx` and `certbot` system packages if not already present (via apt on Ubuntu, via Homebrew on macOS). These are managed by their respective managers, not declared as Python dependencies.
+The admin interface uses `flask` and `frappe-ui` (declared separately in `admin/`). The bench CLI itself imports nothing outside stdlib.
 
-**Production setup (`bench setup nginx`, `bench setup letsencrypt`, `bench setup production`) targets Ubuntu/Linux servers.** macOS is a development platform; run `bench run` with honcho there instead.
+`bench setup nginx` and `bench setup letsencrypt` install the `nginx` and `certbot` system packages if not already present (via apt on Ubuntu, via Homebrew on macOS). These are managed by their respective managers, not Python dependencies.
+
+**Production setup targets Ubuntu/Linux servers.** macOS is a development platform; run `bench start` there instead.

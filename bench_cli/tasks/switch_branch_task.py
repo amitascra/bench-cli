@@ -5,6 +5,7 @@ Invoked as: python -m bench_cli.tasks.switch_branch_task <bench_root> <app_name>
 import argparse
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 
@@ -17,11 +18,13 @@ def main() -> None:
 
     bench_root = Path(args.bench_root)
     app_path = bench_root / "apps" / args.app_name
-    sites_dir = bench_root / "sites"
-    bench_bin = str(bench_root / "env" / "bin" / "bench")
     python_bin = str(bench_root / "env" / "bin" / "python")
 
-    from bench_cli.utils import uv_bin
+    from bench_cli.config.bench_config import BenchConfig
+    from bench_cli.core.bench import Bench
+    from bench_cli.managers.python_env_manager import PythonEnvManager
+    cfg = BenchConfig.from_file(bench_root / "bench.toml")
+    uv = PythonEnvManager(Bench(cfg, bench_root))._ensure_uv()
 
     if not (app_path / ".git").exists():
         print(f"Error: '{args.app_name}' is not cloned at {app_path}")
@@ -29,22 +32,17 @@ def main() -> None:
 
     print(f"Fetching all remote branches for {args.app_name}...")
     sys.stdout.flush()
-    # Use an explicit refspec so all remote branches are fetched even when the
-    # repo was cloned with --single-branch (which limits the fetch refspec to
-    # just the cloned branch).
     subprocess.run(
         ["git", "-C", str(app_path), "fetch", "origin",
          "+refs/heads/*:refs/remotes/origin/*"],
         check=False,
     )
 
-    # Abort any in-progress merge/rebase so the working tree is clean
     subprocess.run(["git", "-C", str(app_path), "merge", "--abort"],
                    capture_output=True, check=False)
     subprocess.run(["git", "-C", str(app_path), "rebase", "--abort"],
                    capture_output=True, check=False)
 
-    # Stash any remaining local changes so checkout can proceed
     stash_result = subprocess.run(
         ["git", "-C", str(app_path), "stash", "--include-untracked"],
         capture_output=True, text=True, check=False,
@@ -54,8 +52,6 @@ def main() -> None:
     print(f"Switching to branch '{args.branch}'...")
     sys.stdout.flush()
 
-    # -B creates the branch if it doesn't exist, or resets it to the given
-    # start point if it already exists — either way ends up clean on the branch.
     result = subprocess.run(
         ["git", "-C", str(app_path), "checkout", "-B", args.branch,
          f"origin/{args.branch}"],
@@ -69,26 +65,21 @@ def main() -> None:
 
     print(f"Reinstalling {args.app_name}...")
     sys.stdout.flush()
-    subprocess.run(
-        [uv_bin(), "pip", "install", "--python", python_bin, "-e", str(app_path)],
-        check=False,
-    )
+    subprocess.run([uv, "pip", "install", "--python", python_bin, "-e", str(app_path)], check=False)
 
-    # Update bench.yml to reflect the new active branch
-    import yaml
-    bench_yml = bench_root / "bench.yml"
-    raw = yaml.safe_load(bench_yml.read_text()) or {}
+    # Update bench.toml to reflect the new active branch
+    bench_toml = bench_root / "bench.toml"
+    with bench_toml.open("rb") as fh:
+        raw = tomllib.load(fh)
     for app_entry in raw.get("apps", []):
         if app_entry.get("name") == args.app_name:
             app_entry["branch"] = args.branch
             break
-    bench_yml.write_text(
-        yaml.dump(raw, default_flow_style=False, allow_unicode=True, sort_keys=False)
-    )
-    print(f"Updated bench.yml: {args.app_name} -> {args.branch}")
+    from bench_cli.utils import write_toml
+    write_toml(bench_toml, raw)
+    print(f"Updated bench.toml: {args.app_name} -> {args.branch}")
     sys.stdout.flush()
 
-    # Rebuild assets — app root and frontend treated as separate JS projects
     from bench_cli.tasks.build_assets import build_app_assets
     build_app_assets(bench_root, args.app_name)
 

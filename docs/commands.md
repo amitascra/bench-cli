@@ -4,48 +4,47 @@
 
 ## `bench new`
 
-Scaffolds a starter `bench.yml` in the current directory.
+Scaffolds a starter `bench.toml` inside a new bench directory.
 
-**Pre-conditions:** No `bench.yml` exists in the current directory.
+**Pre-conditions:** No bench directory with the given name exists under `benches/`.
 
 **Steps:**
-1. Check that no `bench.yml` exists. If one exists, print an error and exit.
-2. Write a minimal `bench.yml` with placeholder values to the current directory.
-3. Print a message telling the user to edit the file and then run `bench init`.
+1. Check that `benches/<name>/` does not already exist. If it does, print an error and exit.
+2. Create `benches/<name>/`.
+3. Write a minimal `bench.toml` with placeholder values to `benches/<name>/bench.toml`.
+4. Print a message telling the user to edit the file and then run `bench init`.
 
-**Does not** touch the filesystem beyond writing `bench.yml`.
+**Does not** touch the filesystem beyond creating the directory and writing `bench.toml`.
 
 ---
 
 ## `bench init`
 
-Installs and configures the entire environment described in `bench.yml`. Safe to re-run — each step checks whether it has already been done.
+Installs and configures the entire environment described in `bench.toml`. Safe to re-run — each step checks whether it has already been done.
 
 ### Pre-conditions
 
-- `bench.yml` exists and is valid.
+- `bench.toml` exists and is valid.
 - **Ubuntu:** The process has `sudo` access (required for `apt-get`).
 - **macOS:** Homebrew is installed (`brew` is in `$PATH`). No `sudo` required — Homebrew installs to user-owned directories.
 
 ### Steps
 
 ```
-1.  Validate bench.yml
+1.  Validate bench.toml
 2.  Install system packages
 3.  Create bench directory structure
 4.  Create Python virtualenv
-5.  Clone apps
-6.  Install Python dependencies
-7.  Install Node.js
+5.  Clone and install framework app
+6.  Install Node.js
+7.  Install Node.js dependencies
 8.  Configure Redis
-9.  Create sites
-10. Install apps on sites
-11. Generate Procfile
+9.  Generate Procfile
 ```
 
-#### Step 1 — Validate bench.yml
+#### Step 1 — Validate bench.toml
 
-`BenchConfig.from_file('bench.yml')` runs all validation rules. On failure, print the error and exit with code 1. No filesystem changes have occurred at this point.
+`BenchConfig.from_file('bench.toml')` runs all validation rules. On failure, print the error and exit with code 1. No filesystem changes have occurred at this point.
 
 #### Step 2 — Install system packages
 
@@ -83,35 +82,36 @@ All created with `exist_ok=True`.
 
 #### Step 4 — Create Python virtualenv
 
-`PythonEnvManager.create_venv()` runs:
+`PythonEnvManager.create_venv()` runs `uv venv` with the requested Python version:
 ```
-python3.<version> -m venv env/
+uv venv --python <version> env/
 ```
-Skipped if `env/bin/python` already exists.
+`uv` is auto-installed if not present. Skipped if `env/bin/python` already exists.
 
-#### Step 5 — Clone apps
+#### Step 5 — Clone and install framework app
 
-For each `AppConfig` in order:
+For each `AppConfig` in `bench.init_apps()` (reads from `bench.toml [[apps]]`):
 - Skip if `App.is_cloned` is already `True`.
 - `App.clone()` runs:
   ```
   git clone <repo> --branch <branch> --depth 1 apps/<name>
   ```
-
-#### Step 6 — Install Python dependencies
-
-For each `App` in order:
 - `PythonEnvManager.install_app(app)` runs:
   ```
   uv pip install -e apps/<name>
   ```
-- This installs the app and all its `requirements.txt` dependencies. `uv` is used instead of pip for speed.
 
-#### Step 7 — Install Node.js
+This installs the framework app and all its dependencies. After `bench init`, additional apps are added via `bench get-app`.
+
+#### Step 6 — Install Node.js
 
 `PythonEnvManager.install_node()` checks if `node` is present. If not, installs Node.js 24 via the NodeSource setup script.
 
 Yarn is installed globally afterward: `npm install -g yarn`.
+
+#### Step 7 — Install Node.js dependencies
+
+`PythonEnvManager.install_node_dependencies()` runs `yarn install` for each app in `apps/` that has a `package.json`.
 
 #### Step 8 — Configure Redis
 
@@ -135,35 +135,9 @@ bind 127.0.0.1
 
 Existing files are overwritten.
 
-#### Step 9 — Create sites
+#### Step 9 — Generate Procfile
 
-For each `SiteConfig`, if `Site.exists` is `False`:
-- `Site.create(mariadb_config)` runs the framework app's `new-site` command:
-  ```
-  env/bin/bench new-site <site.name>
-      --mariadb-root-password <root_password>
-      --admin-password <site.admin_password>
-      --no-mariadb-socket
-  ```
-
-frappe generates and manages the database name and credentials internally; they are written into `sites/<name>/site_config.json`. Do not pass `--db-name` or `--db-password`.
-
-Skipped if the site directory already contains `site_config.json`.
-
-#### Step 10 — Install apps on sites
-
-For each `SiteConfig`, for each app in `site.apps` (in order):
-- `Site.install_app(app_name)` runs:
-  ```
-  env/bin/bench --site <site.name> install-app <app_name>
-  ```
-- `frappe` is always already installed by `new-site`; skip it to avoid a harmless but confusing error.
-
-#### Step 11 — Generate process manager config
-
-`ProcessManagerFactory.create(bench)` returns the right manager based on `bench.config.process_manager`, then `generate_config()` is called.
-
-**When `process_manager: honcho`** — writes `config/Procfile`.
+Writes `config/Procfile` with one line per process: web server, socketio, workers, and Redis.
 
 Single-instance Redis (`redis.port`):
 ```
@@ -174,7 +148,6 @@ worker_default_2: env/bin/bench worker --queue default
 worker_short_1: env/bin/bench worker --queue short
 worker_long_1: env/bin/bench worker --queue long
 redis: redis-server config/redis.conf
-admin: python -m bench_cli.admin.server --bench-root . --port 8002 --no-timeout
 ```
 
 Multi-instance Redis (`cache_port`/`queue_port`/`socketio_port`):
@@ -183,63 +156,124 @@ Multi-instance Redis (`cache_port`/`queue_port`/`socketio_port`):
 redis_cache: redis-server config/redis_cache.conf
 redis_queue: redis-server config/redis_queue.conf
 redis_socketio: redis-server config/redis_socketio.conf
-admin: python -m bench_cli.admin.server --bench-root . --port 8002 --no-timeout
 ```
 
-The `admin` process is always included. It serves a "Admin is off" page by default; set `admin.enabled: true` in `bench.yml` to activate the full UI without restarting.
-
-**When `process_manager: supervisor`** — writes `config/supervisor.conf` with one `[program:X]` section per process (see architecture.md for the full template). This step does **not** start supervisord; that is done by `bench run`.
+On completion, prints:
+```
+bench init complete. Next steps:
+  bench new-site site1.localhost  # create your first site
+  bench start                     # start all processes
+```
 
 ---
 
-## `bench run`
+## `bench get-app`
 
-Starts all bench processes using whichever process manager is configured.
+Clones an app from a git repository and installs it into the virtualenv.
+
+```bash
+bench get-app https://github.com/frappe/erpnext --branch version-16
+```
+
+### Steps
+
+```
+1.  Validate bench.toml
+2.  Clone the app
+3.  Install Python dependencies
+4.  Update apps.txt
+```
+
+#### Step 2 — Clone the app
+
+`App.clone()` runs `git clone <repo> --branch <branch> --depth 1 apps/<name>`. The app name is inferred from the repository URL (last path component, without `.git`). Skipped if already cloned.
+
+#### Step 3 — Install Python dependencies
+
+`PythonEnvManager.install_app(app)` runs `uv pip install -e apps/<name>`.
+
+#### Step 4 — Update apps.txt
+
+Appends the app name to `sites/apps.txt`. Does **not** modify `bench.toml`.
+
+---
+
+## `bench new-site`
+
+Creates a new Frappe site.
+
+```bash
+bench new-site site1.localhost
+bench new-site site1.localhost --admin-password admin
+```
+
+### Steps
+
+```
+1.  Validate bench.toml
+2.  Check site does not already exist
+3.  Create the site
+4.  Update common_site_config.json
+```
+
+#### Step 3 — Create the site
+
+`Site.create(mariadb_config)` runs the framework app's `new-site` command:
+```
+env/bin/bench new-site <site.name>
+    --mariadb-root-password <root_password>
+    --admin-password <admin_password>
+    --no-mariadb-socket
+```
+
+frappe generates and manages the database name and credentials internally; they are written into `sites/<name>/site_config.json`. The site directory is created on disk — it is **not** written to `bench.toml`.
+
+#### Step 4 — Update common_site_config.json
+
+`Bench.write_common_site_config()` rewrites `sites/common_site_config.json` with Redis URLs and the default site. Sites are discovered from the filesystem (`sites/` directory), not from `bench.toml`.
+
+---
+
+## `bench start`
+
+Starts all bench processes using the built-in Procfile runner.
 
 ### Pre-conditions
 
-- `bench init` has been run at least once (the process manager config file exists).
+- `bench init` has been run at least once (`config/Procfile` exists).
 - MariaDB service is running on the host.
 
 ### Steps
 
 ```
-1.  Validate bench.yml
-2.  Check process manager config exists
+1.  Validate bench.toml
+2.  Check Procfile exists
 3.  Start processes
 ```
 
-#### Step 1 — Validate bench.yml
+#### Step 2 — Check Procfile exists
 
-Same as in `bench init`. Exit on error.
-
-#### Step 2 — Check config exists
-
-`ProcessManagerFactory.create(bench)` selects the manager. If the expected config file is missing (`config/Procfile` for honcho, `config/supervisor.conf` for supervisor), print a message telling the user to run `bench init` first and exit with code 1.
+If `config/Procfile` is missing, print a message telling the user to run `bench init` first and exit with code 1.
 
 #### Step 3 — Start processes
 
-**With honcho (`process_manager: honcho`)**
+`HonchoProcessManager.start()` reads `config/Procfile` and spawns each process with `subprocess.Popen`. A dedicated thread per process streams output to stdout with a `<process-name> |` prefix and writes to `logs/<process-name>.log`. Per-process PID files are written to `pids/<name>.pid`.
 
-`HonchoProcessManager.start()` invokes honcho programmatically (via its Python API, not subprocess) with `config/Procfile` as input.
+`bench start` **blocks** — it stays in the foreground until the user sends `SIGINT` (Ctrl-C). On `SIGINT`, all child processes receive `SIGTERM` and are waited on before the parent exits.
 
-- All process output is multiplexed to stdout with a `<process-name> |` prefix.
-- Each process also writes its output to `logs/<process-name>.log`.
-- `bench run` **blocks** — it stays in the foreground until the user sends `SIGINT` (Ctrl-C).
-- On `SIGINT`, honcho sends `SIGTERM` to all child processes and waits up to 5 seconds before sending `SIGKILL`.
+---
 
-**With supervisor (`process_manager: supervisor`)**
+## `bench stop`
 
-`SupervisorProcessManager.start()` sets the `BENCH_ROOT` environment variable to the bench root path, then:
+Stops a running bench that was started with `bench start`.
 
-- If supervisord is **not** running: `supervisord -c config/supervisor.conf`
-- If supervisord **is** running (socket exists and responds): `supervisorctl -c config/supervisor.conf reload`
+### Steps
 
-`bench run` **exits immediately** after this. Supervisord runs as a background daemon; process output goes to the per-process log files under `logs/`.
+1. Read `pids/bench.pid`. If it does not exist, print "Bench is not running." and exit.
+2. Send `SIGTERM` to the process group.
+3. Remove `pids/bench.pid`.
 
-To inspect running processes: `supervisorctl -c config/supervisor.conf status`
-
-To stop all processes: `supervisorctl -c config/supervisor.conf shutdown`
+Works across terminal sessions — the PID file is the source of truth.
 
 ---
 
@@ -254,7 +288,7 @@ Builds JavaScript and CSS assets for all installed apps.
 ### Steps
 
 ```
-1.  Validate bench.yml
+1.  Validate bench.toml
 2.  For each app, build assets
 3.  Copy built assets to sites/assets/
 ```
@@ -288,7 +322,7 @@ Pulls the latest commits for all apps, reinstalls Python packages, and migrates 
 ### Steps
 
 ```
-1.  Validate bench.yml
+1.  Validate bench.toml
 2.  Warn if processes are running
 3.  For each app: git pull
 4.  For each app: uv pip install -e
@@ -297,11 +331,11 @@ Pulls the latest commits for all apps, reinstalls Python packages, and migrates 
 
 #### Step 2 — Warn if processes are running
 
-Call `ProcessManagerFactory.create(bench).is_running()`. If it returns `True`, print a warning (not an error) and ask the user to confirm before continuing. In non-interactive mode (`--yes` flag), skip the prompt and proceed.
+If `pids/bench.pid` exists and the process is alive, print a warning and ask the user to confirm before continuing. In non-interactive mode (`--yes` flag), skip the prompt and proceed.
 
 #### Step 3 — git pull for each app
 
-`App.update()` runs:
+`App.update()` runs (for each app discovered in `apps/`):
 ```
 git -C apps/<name> fetch origin
 git -C apps/<name> merge --ff-only origin/<branch>
@@ -311,28 +345,28 @@ Fast-forward only. If a merge conflict would occur, print an error for that app 
 
 #### Step 4 — uv pip install -e for each app
 
-`PythonEnvManager.install_app(app)` re-runs `uv pip install -e apps/<name>` to pick up any new Python dependencies added to the app since the last update.
+`PythonEnvManager.install_app(app)` re-runs `uv pip install -e apps/<name>` to pick up any new Python dependencies.
 
 #### Step 5 — bench migrate for each site
 
-`Site.migrate()` runs:
+`Site.migrate()` runs (for each site discovered in `sites/`):
 ```
 env/bin/bench --site <site.name> migrate
 ```
 
-Runs in order for each site. If migration fails on one site, print the error and continue with remaining sites. Exit with a non-zero code at the end if any migration failed.
+If migration fails on one site, print the error and continue with remaining sites. Exit with a non-zero code at the end if any migration failed.
 
 ---
 
 ## `bench update-config`
 
-Regenerates all derived config files from `bench.yml` without running a full `bench init`. Use this after editing `bench.yml` to update ports, worker counts, redis settings, or nginx config.
+Regenerates all derived config files from `bench.toml` without running a full `bench init`. Use this after editing `bench.toml` to update ports, worker counts, or Redis settings.
 
 **Files regenerated:**
 - `config/redis.conf` (single-instance) or `config/redis_cache.conf`, `config/redis_queue.conf`, `config/redis_socketio.conf` (multi-instance)
-- `config/Procfile` (honcho) or `config/supervisor.conf` (supervisor)
+- `config/Procfile`
 - `sites/common_site_config.json`
-- `config/nginx/*.conf` — only if `nginx.enabled: true`
+- `config/nginx/*.conf` — only if `nginx.enabled = true`
 
 **Does not:** restart processes, reload nginx, or touch apps/sites. Run `bench start` after to pick up process changes. Run `bench setup nginx` to reload nginx.
 
@@ -353,9 +387,7 @@ bench start-admin --port 9000  # custom port
 3. Write `pids/admin.pid` and `pids/admin.port`.
 4. Print the admin URL.
 
-The admin server includes a watchdog that sends `SIGTERM` to itself after the configured inactivity timeout. Use `bench stop-admin` to stop it immediately.
-
-> **Note:** When using `bench start` (honcho/supervisor), the admin process is already included in the Procfile and starts automatically — `bench start-admin` is only needed when running the admin independently of the full bench.
+The admin server includes a watchdog that sends `SIGTERM` to itself after the configured inactivity timeout (default: 3 minutes). Use `bench stop-admin` to stop it immediately.
 
 ---
 
@@ -377,7 +409,7 @@ Handles stale PID files gracefully — if the process has already exited (e.g. a
 Starts the admin web interface in the **foreground** (development use). Press `Ctrl-C` to stop.
 
 ```bash
-bench admin                    # default port 8001
+bench admin                    # default port 8002
 bench admin --port 9000        # custom port
 bench admin --host 0.0.0.0     # expose to the network
 ```
@@ -390,11 +422,11 @@ See [docs/admin.md](admin.md) for the full interface specification.
 
 See [docs/production.md](production.md) for the full step-by-step.
 
-**Summary:** Installs nginx if absent, generates per-site config files into `config/nginx/`, symlinks `include.conf` into `nginx.config_dir`, validates with `nginx -t`, and reloads nginx.
+**Summary:** Installs nginx if absent, generates per-site config files into `config/nginx/`, symlinks `include.conf` into `nginx.config_dir`, validates with `nginx -t`, and reloads nginx. Sites are discovered from the filesystem.
 
-Pre-conditions: `nginx.enabled: true`, `bench init` has been run, process has `sudo` (Ubuntu) or Homebrew (macOS).
+Pre-conditions: `nginx.enabled = true` in `bench.toml`, `bench init` has been run, process has `sudo` (Ubuntu) or Homebrew (macOS).
 
-> **macOS note:** This command works on macOS with Homebrew nginx for local testing, but its primary use case is production deployment on Ubuntu/Linux servers. The `config_dir` default (`/etc/nginx/conf.d`) does not exist on macOS — set it to `/opt/homebrew/etc/nginx/servers/` (Apple Silicon) or `/usr/local/etc/nginx/servers/` (Intel) in `bench.yml`.
+> **macOS note:** This command works on macOS with Homebrew nginx for local testing, but its primary use case is production deployment on Ubuntu/Linux servers. The `config_dir` default (`/etc/nginx/conf.d`) does not exist on macOS — set it to `/opt/homebrew/etc/nginx/servers/` (Apple Silicon) or `/usr/local/etc/nginx/servers/` (Intel) in `bench.toml`.
 
 ---
 
@@ -402,7 +434,7 @@ Pre-conditions: `nginx.enabled: true`, `bench init` has been run, process has `s
 
 See [docs/production.md](production.md) for the full step-by-step.
 
-**Summary:** Installs certbot if absent, ensures the webroot directory exists, runs `certbot certonly --webroot` for each `ssl: true` site (with all domains as `-d` arguments), then regenerates nginx config with HTTPS blocks and reloads nginx.
+**Summary:** Installs certbot if absent, ensures the webroot directory exists, runs `certbot certonly --webroot` for each site with `ssl = true` in `site_config.json` (with all domains as `-d` arguments), then regenerates nginx config with HTTPS blocks and reloads nginx.
 
 Pre-conditions: `bench setup nginx` has run, nginx is serving port 80, DNS records for all SSL sites point to this server.
 
@@ -414,9 +446,9 @@ Pre-conditions: `bench setup nginx` has run, nginx is serving port 80, DNS recor
 
 See [docs/production.md](production.md) for the full step-by-step.
 
-**Summary:** Validates that `process_manager` is `supervisor`, writes `dns_multitenant: 1` to `sites/common_site_config.json`, sets up supervisor, then runs `bench setup nginx` and `bench setup letsencrypt` in sequence.
+**Summary:** Writes `dns_multitenant: 1` to `sites/common_site_config.json`, then runs `bench setup nginx` and `bench setup letsencrypt` in sequence.
 
-> **macOS note:** Production setup targets Ubuntu/Linux servers. On macOS, use `bench run` (honcho) for development. Running `bench setup production` on macOS will print an error and exit.
+> **macOS note:** Production setup targets Ubuntu/Linux servers. On macOS, use `bench start` for development.
 
 ---
 
@@ -436,6 +468,6 @@ All commands accept:
 
 | Flag | Description |
 |------|-------------|
-| `--bench-dir PATH` | Override the directory containing `bench.yml`. Default: search upward from `$CWD`. |
+| `-b/--bench NAME` | Specify which bench to operate on (its name under `benches/`). Required when multiple benches exist and none is active. |
 | `--verbose` | Print full tracebacks on error and all subprocess output. |
 | `--yes` | Skip confirmation prompts (useful in CI). |

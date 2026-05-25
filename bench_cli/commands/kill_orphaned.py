@@ -3,9 +3,8 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import sys
 from typing import TYPE_CHECKING, List, Tuple
-
-import click
 
 if TYPE_CHECKING:
     from bench_cli.core.bench import Bench
@@ -20,15 +19,22 @@ class KillOrphanedCommand:
         orphaned = self._find_orphaned()
 
         if not orphaned:
-            click.echo("No orphaned bench processes found.")
+            print("No orphaned bench processes found.")
             return
 
-        click.echo(f"Found {len(orphaned)} orphaned process(es):")
+        print(f"Found {len(orphaned)} orphaned process(es):")
         for pid, cmdline in orphaned:
-            click.echo(f"  [{pid}] {cmdline[:120]}")
+            print(f"  [{pid}] {cmdline[:120]}")
 
         if not self.skip_confirm:
-            click.confirm("Kill all?", abort=True)
+            try:
+                answer = input("Kill all? [y/N] ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\nAborted.")
+                sys.exit(1)
+            if answer not in ("y", "yes"):
+                print("Aborted.")
+                sys.exit(1)
 
         killed = 0
         for pid, _ in orphaned:
@@ -39,7 +45,7 @@ class KillOrphanedCommand:
                 pass
 
         self._clean_stale_pid_files()
-        click.echo(f"Killed {killed} process(es).")
+        print(f"Killed {killed} process(es).")
 
     def _find_orphaned(self) -> List[Tuple[int, str]]:
         bench_path = str(self.bench.path.resolve())
@@ -53,10 +59,11 @@ class KillOrphanedCommand:
                 check=True,
             )
         except FileNotFoundError:
-            raise click.ClickException("ps command not found — cannot scan for orphaned processes.")
+            print("Error: ps command not found — cannot scan for orphaned processes.", file=sys.stderr)
+            sys.exit(1)
 
         orphaned = []
-        for line in result.stdout.splitlines()[1:]:  # skip header
+        for line in result.stdout.splitlines()[1:]:
             if bench_path not in line:
                 continue
             parts = line.split(None, 10)

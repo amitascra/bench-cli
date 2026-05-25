@@ -27,10 +27,10 @@ class NginxManager:
     def generate_config(self, ssl_ready: bool = False) -> None:
         nginx_dir = self.bench.config_path / "nginx"
         nginx_dir.mkdir(parents=True, exist_ok=True)
-        for site in self.bench.config.sites:
-            site_ssl_ready = ssl_ready and self.cert_exists(site)
-            conf_text = self._generate_site_config(site, site_ssl_ready)
-            conf_path = nginx_dir / f"{site.name}.conf"
+        for site in self.bench.sites():
+            site_ssl_ready = ssl_ready and self.cert_exists(site.config)
+            conf_text = self._generate_site_config(site.config, site_ssl_ready)
+            conf_path = nginx_dir / f"{site.config.name}.conf"
             conf_path.write_text(conf_text)
         self._write_include_conf(nginx_dir)
 
