@@ -31,8 +31,8 @@
     "title": "CRM",
     "description": "Sales CRM with leads, deals, pipeline views, email sequences, and call management.",
     "repo": "https://github.com/frappe/crm",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/crm.svg"
   },
   {
@@ -40,8 +40,8 @@
     "title": "Helpdesk",
     "description": "Customer support and ticket management with SLAs, canned replies, and a customer portal.",
     "repo": "https://github.com/frappe/helpdesk",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/helpdesk.svg"
   },
   {
@@ -49,8 +49,8 @@
     "title": "Wiki",
     "description": "Knowledge base and documentation tool with versioning, search, and a clean reading experience.",
     "repo": "https://github.com/frappe/wiki",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": null
   },
   {
@@ -58,8 +58,8 @@
     "title": "Drive",
     "description": "Open source file storage and sharing — upload, organise, and collaborate on documents.",
     "repo": "https://github.com/frappe/drive",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/drive.svg"
   },
   {
@@ -67,8 +67,8 @@
     "title": "Builder",
     "description": "No-code website builder with drag-and-drop blocks, components, and live preview.",
     "repo": "https://github.com/frappe/builder",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/builder.png"
   },
   {
@@ -76,8 +76,8 @@
     "title": "LMS",
     "description": "Learning management system with courses, quizzes, certificates, and progress tracking.",
     "repo": "https://github.com/frappe/lms",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/lms.png"
   },
   {
@@ -85,8 +85,8 @@
     "title": "Payments",
     "description": "Payment gateway integrations for Stripe, Razorpay, PayPal, Braintree, and more.",
     "repo": "https://github.com/frappe/payments",
-    "branch": "main",
-    "branches": ["main"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": null
   },
   {
@@ -94,8 +94,8 @@
     "title": "Health",
     "description": "Healthcare management with patient records, appointments, lab results, and billing.",
     "repo": "https://github.com/frappe/health",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/health.svg"
   },
   {
@@ -103,8 +103,8 @@
     "title": "Gameplan",
     "description": "Team collaboration with discussions, projects, to-dos, and a searchable archive.",
     "repo": "https://github.com/frappe/gameplan",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/gameplan.svg"
   },
   {
@@ -112,8 +112,8 @@
     "title": "Insights",
     "description": "Self-serve business intelligence with charts, dashboards, and visual data queries.",
     "repo": "https://github.com/frappe/insights",
-    "branch": "main",
-    "branches": ["main", "develop"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/insights.svg"
   },
   {
@@ -121,8 +121,8 @@
     "title": "Lending",
     "description": "Loan origination and management for NBFCs — applications, disbursement, and collections.",
     "repo": "https://github.com/frappe/lending",
-    "branch": "main",
-    "branches": ["main"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/lending.png"
   },
   {
@@ -157,8 +157,8 @@
     "title": "eCommerce Integrations",
     "description": "Sync inventory and orders between ERPNext and Shopify, Amazon, WooCommerce, and Unicommerce.",
     "repo": "https://github.com/frappe/ecommerce_integrations",
-    "branch": "main",
-    "branches": ["main"],
+    "branch": "develop",
+    "branches": ["develop"],
     "logo_url": "/logos/ecommerce_integrations.png"
   }
 ]

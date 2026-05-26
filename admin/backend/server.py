@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import signal
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -47,7 +48,26 @@ def main() -> None:
 
         threading.Thread(target=_watchdog, daemon=True).start()
 
+    # Start vite only in the outer watcher process, not in the child that
+    # werkzeug's reloader spawns (WERKZEUG_RUN_MAIN is set in that child).
+    if args.dev and not os.environ.get("WERKZEUG_RUN_MAIN"):
+        _start_vite_watch()
+
     app.run(host="0.0.0.0", port=args.port, threaded=True, use_reloader=args.dev)
+
+
+def _start_vite_watch() -> None:
+    frontend_dir = Path(__file__).parent.parent / "frontend"
+    if not frontend_dir.exists():
+        return
+
+    def _run() -> None:
+        subprocess.run(
+            ["node_modules/.bin/vite", "build", "--watch"],
+            cwd=str(frontend_dir),
+        )
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 if __name__ == "__main__":

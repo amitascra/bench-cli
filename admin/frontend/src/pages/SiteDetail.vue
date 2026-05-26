@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Button, Badge, Dialog, FormControl, LoadingText, ErrorMessage, TabButtons } from 'frappe-ui'
+import { Button, Badge, Dialog, FormControl, LoadingText, ErrorMessage, Tabs } from 'frappe-ui'
 import LucideDatabase from '~icons/lucide/database'
 import LucideServer from '~icons/lucide/server'
 
@@ -29,11 +29,11 @@ const showDrop = ref(false)
 const showUninstall = ref(false)
 const uninstallTarget = ref('')
 
-const activeTab = ref('apps')
+const activeTab = ref(0)
 const tabs = [
-  { label: 'Apps', value: 'apps' },
-  { label: 'Config', value: 'config' },
-  { label: 'Danger Zone', value: 'danger' },
+  { label: 'Apps' },
+  { label: 'Config' },
+  { label: 'Danger Zone' },
 ]
 
 const COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed']
@@ -151,62 +151,62 @@ onMounted(() => { load(); loadRegistry() })
       <ErrorMessage :message="actionError" />
 
       <!-- Tabs -->
-      <div class="flex flex-col gap-4">
-        <TabButtons :buttons="tabs" v-model="activeTab" />
-
-        <!-- Apps -->
-        <div v-if="activeTab === 'apps'">
-          <div v-if="!site.installed_apps.length" class="py-10 text-center text-sm text-ink-gray-4">
-            No apps installed on this site.
-          </div>
-          <div v-else class="divide-y rounded border">
-            <div
-              v-for="app in site.installed_apps"
-              :key="app"
-              class="flex items-center justify-between px-4 py-3"
-            >
-              <div class="flex items-center gap-3">
-                <div
-                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md overflow-hidden"
-                  :style="logoMap[app] ? {} : { background: hashColor(app) }"
-                >
-                  <img v-if="logoMap[app]" :src="logoMap[app]" :alt="app" class="h-full w-full object-contain" />
-                  <span v-else class="text-sm font-bold text-white">{{ app[0].toUpperCase() }}</span>
+      <Tabs :tabs="tabs" v-model="activeTab">
+        <template #tab-panel="{ tab }">
+          <!-- Apps -->
+          <div v-if="tab.label === 'Apps'" class="pt-4">
+            <div v-if="!site.installed_apps.length" class="py-10 text-center text-sm text-ink-gray-4">
+              No apps installed on this site.
+            </div>
+            <div v-else class="divide-y rounded border">
+              <div
+                v-for="app in site.installed_apps"
+                :key="app"
+                class="flex items-center justify-between px-4 py-3"
+              >
+                <div class="flex items-center gap-3">
+                  <div
+                    class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md overflow-hidden"
+                    :style="logoMap[app] ? {} : { background: hashColor(app) }"
+                  >
+                    <img v-if="logoMap[app]" :src="logoMap[app]" :alt="app" class="h-full w-full object-contain" />
+                    <span v-else class="text-sm font-bold text-white">{{ app[0].toUpperCase() }}</span>
+                  </div>
+                  <span class="text-sm font-medium text-ink-gray-8">{{ app }}</span>
                 </div>
-                <span class="text-sm font-medium text-ink-gray-8">{{ app }}</span>
+                <Button variant="ghost" theme="red" size="sm" @click="confirmUninstall(app)">
+                  Uninstall
+                </Button>
               </div>
-              <Button variant="ghost" theme="red" size="sm" @click="confirmUninstall(app)">
-                Uninstall
-              </Button>
             </div>
           </div>
-        </div>
 
-        <!-- Config -->
-        <div v-else-if="activeTab === 'config'">
-          <div class="rounded border bg-surface-gray-1 p-4">
-            <p class="mb-2 text-xs font-medium text-ink-gray-5">site_config.json</p>
-            <pre class="overflow-x-auto font-mono text-sm text-ink-gray-8">{{ JSON.stringify(site.site_config, null, 2) }}</pre>
-          </div>
-        </div>
-
-        <!-- Danger Zone -->
-        <div v-else-if="activeTab === 'danger'">
-          <div class="rounded border border-red-200 p-4">
-            <div class="flex items-center justify-between gap-4">
-              <div>
-                <p class="text-sm font-medium text-ink-gray-9">Drop Site</p>
-                <p class="mt-0.5 text-sm text-ink-gray-5">
-                  Permanently delete <strong>{{ siteName }}</strong> and all its data. This cannot be undone.
-                </p>
-              </div>
-              <Button variant="solid" theme="red" class="shrink-0" @click="showDrop = true">
-                Drop Site
-              </Button>
+          <!-- Config -->
+          <div v-else-if="tab.label === 'Config'" class="pt-4">
+            <div class="rounded border bg-surface-gray-1 p-4">
+              <p class="mb-2 text-xs font-medium text-ink-gray-5">site_config.json</p>
+              <pre class="overflow-x-auto font-mono text-sm text-ink-gray-8">{{ JSON.stringify(site.site_config, null, 2) }}</pre>
             </div>
           </div>
-        </div>
-      </div>
+
+          <!-- Danger Zone -->
+          <div v-else-if="tab.label === 'Danger Zone'" class="pt-4">
+            <div class="rounded border border-red-200 p-4">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <p class="text-sm font-medium text-ink-gray-9">Drop Site</p>
+                  <p class="mt-0.5 text-sm text-ink-gray-5">
+                    Permanently delete <strong>{{ siteName }}</strong> and all its data. This cannot be undone.
+                  </p>
+                </div>
+                <Button variant="solid" theme="red" class="shrink-0" @click="showDrop = true">
+                  Drop Site
+                </Button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </Tabs>
     </template>
 
     <!-- Install App dialog -->

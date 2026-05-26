@@ -6,6 +6,7 @@ from flask import Flask, jsonify, request, send_file
 
 from .views.apps import apps_bp
 from .views.dashboard import dashboard_bp
+from .views.stats import stats_bp
 from .views.database import database_bp
 from .views.logs import logs_bp
 from .views.processes import processes_bp
@@ -50,6 +51,7 @@ def create_app(bench_root: Path) -> Flask:
     app.register_blueprint(logs_bp, url_prefix="/api/logs")
     app.register_blueprint(database_bp, url_prefix="/api/database")
     app.register_blueprint(tasks_bp, url_prefix="/api/tasks")
+    app.register_blueprint(stats_bp, url_prefix="/api")
 
     app.register_error_handler(ConfigError, _handle_config_error)
     app.register_error_handler(FileNotFoundError, _handle_file_not_found)

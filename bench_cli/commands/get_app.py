@@ -11,7 +11,7 @@ from bench_cli.managers.python_env_manager import PythonEnvManager
 
 
 class GetAppCommand:
-    def __init__(self, bench: Bench, repo: str, branch: str = "main") -> None:
+    def __init__(self, bench: Bench, repo: str, branch: str = "") -> None:
         from pathlib import PurePosixPath
 
         name = PurePosixPath(repo.rstrip("/")).name

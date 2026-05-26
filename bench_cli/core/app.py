@@ -23,11 +23,31 @@ class App:
     def is_cloned(self) -> bool:
         return self.path.exists() and (self.path / ".git").exists()
 
+    def _detect_default_branch(self) -> str:
+        import subprocess
+        result = subprocess.run(
+            ["git", "ls-remote", "--symref", self.config.repo, "HEAD"],
+            capture_output=True, text=True,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("ref: refs/heads/"):
+                return line.split("refs/heads/")[1].split()[0]
+        # Probe common Frappe branch names in priority order
+        refs = subprocess.run(
+            ["git", "ls-remote", "--heads", self.config.repo],
+            capture_output=True, text=True,
+        ).stdout
+        for candidate in ("develop", "master", "version-16", "version-15"):
+            if f"refs/heads/{candidate}" in refs:
+                return candidate
+        return "develop"
+
     def clone(self) -> None:
+        branch = self.config.branch or self._detect_default_branch()
         run_command([
             "git", "clone",
             self.config.repo,
-            "--branch", self.config.branch,
+            "--branch", branch,
             "--depth", "1",
             str(self.path),
         ], stream_output=True)

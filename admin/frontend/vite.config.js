@@ -17,15 +17,6 @@ export default defineConfig({
     outDir: '../backend/static/dist',
     emptyOutDir: true,
   },
-  server: {
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: `http://localhost:${process.env.VITE_ADMIN_PORT || 8002}`,
-        changeOrigin: true,
-      },
-    },
-  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

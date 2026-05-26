@@ -1,13 +1,13 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Button, Badge, Card, LoadingText, ErrorMessage, ListView } from 'frappe-ui'
+import { Card, LoadingText, ErrorMessage, Progress, AxisChart } from 'frappe-ui'
 
 const router = useRouter()
+
 const data = ref(null)
 const loading = ref(true)
 const error = ref('')
-const actionError = ref('')
 
 async function load() {
   try {
@@ -21,55 +21,54 @@ async function load() {
   }
 }
 
-async function runTask(command, args = {}) {
-  actionError.value = ''
+const MAX_HISTORY = 60
+const stats = ref(null)
+const history = ref([])
+
+async function loadStats() {
   try {
-    const res = await fetch('/api/tasks/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command, ...args }),
-    })
+    const res = await fetch('/api/stats')
+    if (!res.ok) return
     const d = await res.json()
-    if (d.ok) router.push(`/tasks/${d.task_id}`)
-    else actionError.value = d.error
-  } catch (e) {
-    actionError.value = e.message
-  }
+    stats.value = d
+    history.value = [
+      ...history.value.slice(-(MAX_HISTORY - 1)),
+      { time: new Date(), CPU: d.cpu_percent, Memory: d.memory_percent },
+    ]
+  } catch {}
 }
 
-function fmtDuration(s) {
-  if (s == null) return '—'
-  if (s < 60) return `${Math.round(s)}s`
-  if (s < 3600) return `${Math.round(s / 60)}m`
-  return `${Math.round(s / 3600)}h`
+function fmtBytes(bytes) {
+  return (bytes / 1024 ** 3).toFixed(1) + ' GB'
 }
 
-const TASK_COLOR = { success: 'green', failed: 'red', running: 'blue', killed: 'gray', queued: 'gray' }
+const chartConfig = computed(() => ({
+  title: 'CPU & Memory',
+  data: history.value,
+  xAxis: { key: 'time', type: 'time', timeGrain: 'second' },
+  yAxis: { yMin: 0, yMax: 100, echartOptions: { name: '' } },
+  series: [
+    { name: 'CPU', type: 'area' },
+    { name: 'Memory', type: 'area' },
+  ],
+}))
 
-const taskColumns = [
-  { label: 'Command', key: 'command' },
-  { label: 'Status', key: 'status', width: '100px' },
-  { label: 'Duration', key: '_duration', width: '80px' },
-]
-
-const countdownDisplay = ref(10)
-let countdown = 10
-let timer
+let dashTimer, statsTimer
 
 onMounted(() => {
   load()
-  timer = setInterval(() => {
-    countdown--
-    countdownDisplay.value = countdown
-    if (countdown <= 0) { countdown = 10; countdownDisplay.value = 10; load() }
-  }, 1000)
+  loadStats()
+  dashTimer = setInterval(load, 10000)
+  statsTimer = setInterval(loadStats, 3000)
 })
-onUnmounted(() => clearInterval(timer))
+onUnmounted(() => {
+  clearInterval(dashTimer)
+  clearInterval(statsTimer)
+})
 </script>
 
 <template>
   <div class="flex flex-col gap-4">
-
     <LoadingText v-if="loading" />
     <ErrorMessage v-else-if="error" :message="error" />
 
@@ -89,33 +88,41 @@ onUnmounted(() => clearInterval(timer))
         </button>
       </div>
 
-      <Card title="Quick Actions">
-        <div class="flex flex-wrap gap-2">
-          <Button variant="outline" @click="runTask('build')">Build Assets</Button>
-          <Button variant="outline" @click="runTask('update')">Update Bench</Button>
-        </div>
-        <ErrorMessage :message="actionError" class="mt-2" />
-      </Card>
-
-      <Card title="Recent Tasks">
+      <Card v-if="stats" title="Server Stats">
         <template #actions>
-          <Button variant="ghost" size="sm" @click="router.push('/tasks')">View all</Button>
+          <span class="flex items-center gap-1.5 text-xs text-ink-gray-4">
+            <span class="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            Live
+          </span>
         </template>
-        <ListView
-          :columns="taskColumns"
-          :rows="data.recent_tasks.map(t => ({ ...t, _duration: fmtDuration(t.duration_seconds) }))"
-          row-key="task_id"
-          :options="{
-            getRowRoute: (row) => `/tasks/${row.task_id}`,
-            selectable: false,
-            showTooltip: false,
-          }"
-        >
-          <template #cell="{ column, item }">
-            <Badge v-if="column.key === 'status'" :label="item" :theme="TASK_COLOR[item] || 'gray'" size="sm" />
-            <span v-else>{{ item || '—' }}</span>
-          </template>
-        </ListView>
+
+        <div class="flex flex-col gap-6">
+          <div class="grid grid-cols-3 gap-6">
+            <div>
+              <div class="mb-2 flex items-baseline justify-between">
+                <span class="text-sm font-medium text-ink-gray-7">CPU</span>
+                <span class="text-sm font-semibold text-ink-gray-9">{{ stats.cpu_percent.toFixed(1) }}%</span>
+              </div>
+              <Progress :value="stats.cpu_percent" size="md" />
+            </div>
+            <div>
+              <div class="mb-2 flex items-baseline justify-between">
+                <span class="text-sm font-medium text-ink-gray-7">Memory</span>
+                <span class="text-sm text-ink-gray-5">{{ fmtBytes(stats.memory_used) }} / {{ fmtBytes(stats.memory_total) }}</span>
+              </div>
+              <Progress :value="stats.memory_percent" size="md" />
+            </div>
+            <div>
+              <div class="mb-2 flex items-baseline justify-between">
+                <span class="text-sm font-medium text-ink-gray-7">Disk</span>
+                <span class="text-sm text-ink-gray-5">{{ fmtBytes(stats.disk_used) }} / {{ fmtBytes(stats.disk_total) }}</span>
+              </div>
+              <Progress :value="stats.disk_percent" size="md" />
+            </div>
+          </div>
+
+          <AxisChart v-if="history.length > 1" :config="chartConfig" />
+        </div>
       </Card>
     </template>
   </div>

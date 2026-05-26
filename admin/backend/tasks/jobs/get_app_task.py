@@ -21,7 +21,7 @@ def main() -> None:
 
     bench_root = Path(args.bench_root)
     bench = Bench(BenchConfig.from_file(bench_root / "bench.toml"), bench_root)
-    GetAppCommand(bench, args.repo, args.branch or "main").run()
+    GetAppCommand(bench, args.repo, args.branch).run()
 
 
 if __name__ == "__main__":
