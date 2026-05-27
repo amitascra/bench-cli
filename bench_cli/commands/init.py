@@ -11,23 +11,26 @@ class InitCommand:
         self.bench = bench
 
     def run(self) -> None:
-        self._step(1, "Validate bench.toml")
+        production = self.bench.config.nginx.enabled
+        total = 11 if production else 9
+
+        self._step(1, total, "Validate bench.toml")
         self.bench.config.validate()
 
-        self._step(2, "Install system packages")
+        self._step(2, total, "Install system packages")
         self._install_system_packages()
 
-        self._step(3, "Create bench directory structure")
+        self._step(3, total, "Create bench directory structure")
         self.bench.create_directories()
         self.bench.write_common_site_config()
 
-        self._step(4, "Create Python virtualenv")
+        self._step(4, total, "Create Python virtualenv")
         python_env_manager = PythonEnvManager(self.bench)
         python_env_manager.ensure_python()
         python_env_manager.create_venv()
         python_env_manager.generate_bench_script()
 
-        self._step(5, "Clone and install framework app")
+        self._step(5, total, "Clone and install framework app")
         for app in self.bench.init_apps():
             if not app.is_cloned:
                 print(f"  Cloning {app.config.name}...")
@@ -36,24 +39,34 @@ class InitCommand:
             python_env_manager.install_app(app)
         self.bench.write_apps_txt()
 
-        self._step(6, "Install Node.js")
+        self._step(6, total, "Install Node.js")
         python_env_manager.install_node()
 
-        self._step(7, "Install Node.js dependencies")
+        self._step(7, total, "Install Node.js dependencies")
         python_env_manager.install_node_dependencies()
 
-        self._step(8, "Configure Redis")
+        self._step(8, total, "Configure Redis")
         RedisManager(self.bench.config.redis, self.bench).generate_configs()
 
-        self._step(9, "Generate Procfile")
+        self._step(9, total, "Generate Procfile")
+        self._write_common_config_for_production(production)
         ProcessManagerFactory.create(self.bench).generate_config()
 
-        print("\nBench initialised. Next steps:")
-        print("  bench new-site site1.localhost   # create your first site")
-        print("  bench start                      # start all processes")
+        if production:
+            self._step(10, total, "Setup nginx")
+            self._setup_nginx()
+            self._step(11, total, "Setup Let's Encrypt SSL")
+            self._setup_letsencrypt()
 
-    def _step(self, number: int, description: str) -> None:
-        print(f"[{number}/9] {description}...", flush=True)
+        print("\nBench initialised. Next steps:")
+        print("  bench new-site site1.example.com   # create your first site")
+        if production:
+            print("  bench start                        # start all processes")
+        else:
+            print("  bench start                        # start all processes")
+
+    def _step(self, number: int, total: int, description: str) -> None:
+        print(f"[{number}/{total}] {description}...", flush=True)
 
     def _install_system_packages(self) -> None:
         from bench_cli.managers.mariadb_manager import MariaDBManager
@@ -66,3 +79,28 @@ class InitCommand:
             pkg = get_package_manager()
             pkg.install("build-essential", "pkg-config", "libmariadb-dev", "git")
         PythonEnvManager(self.bench).ensure_python()
+
+    def _write_common_config_for_production(self, production: bool) -> None:
+        if not production:
+            return
+        import json
+        common_config_path = self.bench.sites_path / "common_site_config.json"
+        existing: dict = {}
+        if common_config_path.exists():
+            try:
+                existing = json.loads(common_config_path.read_text())
+            except Exception:
+                pass
+        existing["dns_multitenant"] = 1
+        common_config_path.write_text(json.dumps(existing, indent=2))
+
+    def _setup_nginx(self) -> None:
+        from bench_cli.commands.setup.nginx import SetupNginxCommand
+        SetupNginxCommand(self.bench).run()
+
+    def _setup_letsencrypt(self) -> None:
+        if not self.bench.config.letsencrypt.email:
+            print("  Skipped — no letsencrypt.email set in bench.toml")
+            return
+        from bench_cli.commands.setup.letsencrypt import SetupLetsEncryptCommand
+        SetupLetsEncryptCommand(self.bench).run()
