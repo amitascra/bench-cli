@@ -70,6 +70,7 @@ class Bench:
 
     def sites(self) -> List["Site"]:
         """Return all sites by scanning sites/ directory."""
+        import json as _json
         from bench_cli.config.site_config import SiteConfig
         from bench_cli.core.site import Site
 
@@ -77,8 +78,13 @@ class Bench:
             return []
         result = []
         for d in sorted(self.sites_path.iterdir()):
-            if d.is_dir() and (d / "site_config.json").exists():
-                site_config = SiteConfig(name=d.name, apps=[])
+            cfg_path = d / "site_config.json"
+            if d.is_dir() and cfg_path.exists():
+                try:
+                    raw = _json.loads(cfg_path.read_text())
+                except Exception:
+                    raw = {}
+                site_config = SiteConfig(name=d.name, apps=[], ssl=bool(raw.get("ssl")))
                 result.append(Site(site_config, self))
         return result
 

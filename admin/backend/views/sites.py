@@ -174,6 +174,25 @@ def login_to_site(name: str):
     return jsonify({"ok": True, "url": f"http://{name}:{http_port}/desk?sid={sid}"})
 
 
+@sites_bp.route("/<name>/enable-ssl", methods=["POST"])
+def enable_ssl(name: str):
+    bench_root = Path(current_app.config["BENCH_ROOT"])
+    config_path = bench_root / "sites" / name / "site_config.json"
+    if not config_path.exists():
+        return jsonify({"ok": False, "error": "Site not found."}), 404
+
+    import json
+    current = json.loads(config_path.read_text())
+    current["ssl"] = True
+    config_path.write_text(json.dumps(current, indent=1))
+
+    try:
+        task_id = TaskRunner(bench_root).run("setup-letsencrypt", {})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+    return jsonify({"ok": True, "task_id": task_id})
+
+
 @sites_bp.route("/<name>/config", methods=["PATCH"])
 def update_config(name: str):
     bench_root = Path(current_app.config["BENCH_ROOT"])

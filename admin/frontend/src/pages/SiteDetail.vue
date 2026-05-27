@@ -35,6 +35,24 @@ const loginPassword = ref('')
 const loginLoading = ref(false)
 const loginError = ref('')
 
+const sslLoading = ref(false)
+const sslError = ref('')
+
+async function enableSsl() {
+  sslError.value = ''
+  sslLoading.value = true
+  try {
+    const res = await fetch(`/api/sites/${siteName}/enable-ssl`, { method: 'POST' })
+    const d = await res.json()
+    if (d.ok) router.push(`/tasks/${d.task_id}`)
+    else sslError.value = d.error
+  } catch (e) {
+    sslError.value = e.message
+  } finally {
+    sslLoading.value = false
+  }
+}
+
 async function loginToSite() {
   loginError.value = ''
   loginLoading.value = true
@@ -198,6 +216,7 @@ onMounted(() => { load(); loadRegistry() })
               :label="site.exists ? 'Online' : 'Offline'"
               :theme="site.exists ? 'green' : 'gray'"
             />
+            <Badge v-if="site.site_config?.ssl" label="SSL" theme="blue" />
           </div>
           <div class="flex items-center gap-4 text-sm text-ink-gray-5">
             <span v-if="site.db_name" class="flex items-center gap-1.5">
@@ -220,6 +239,9 @@ onMounted(() => { load(); loadRegistry() })
           <Button variant="outline" :loading="actionLoading === 'backup'" @click="doAction('backup')">
             Backup
           </Button>
+          <Button v-if="!site.site_config?.ssl" variant="outline" :loading="sslLoading" @click="enableSsl">
+            Enable SSL
+          </Button>
           <Button v-if="installable.length" variant="solid" @click="showInstall = true">
             Install App
           </Button>
@@ -227,6 +249,7 @@ onMounted(() => { load(); loadRegistry() })
       </div>
 
       <ErrorMessage :message="actionError" />
+      <ErrorMessage :message="sslError" />
 
       <!-- Tabs -->
       <Tabs :tabs="tabs" v-model="activeTab">

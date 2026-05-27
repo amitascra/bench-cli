@@ -82,6 +82,7 @@ class NginxManager:
         max_body = nginx_config.client_max_body_size
         http_port = nginx_config.http_port
         socketio_port = redis_config.socketio_port
+        webroot = self.bench.config.letsencrypt.webroot_path
 
         return (
             f"server {{\n"
@@ -89,6 +90,10 @@ class NginxManager:
             f"    server_name {server_name};\n\n"
             f"    root {bench_root}/sites;\n"
             f"    client_max_body_size {max_body};\n\n"
+            f"    location /.well-known/acme-challenge/ {{\n"
+            f"        root {webroot};\n"
+            f"        try_files $uri =404;\n"
+            f"    }}\n\n"
             + self._render_assets_location()
             + self._render_files_location(site)
             + self._render_socketio_location(socketio_port)

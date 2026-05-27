@@ -27,6 +27,7 @@ _WHITELIST: dict[str, list[str]] = {
     "switch-branch": ["name", "branch"],
     "setup-nginx": [],
     "setup-production": [],
+    "setup-letsencrypt": [],
 }
 
 
@@ -129,6 +130,8 @@ class TaskRunner:
             return [sys.executable, "-m", "admin.backend.tasks.jobs.setup_nginx_task", str(self._bench_root)]
         if command == "setup-production":
             return [sys.executable, "-m", "admin.backend.tasks.jobs.setup_production_task", str(self._bench_root)]
+        if command == "setup-letsencrypt":
+            return [sys.executable, "-m", "admin.backend.tasks.jobs.setup_letsencrypt_task", str(self._bench_root)]
 
         raise ValueError(f"Unhandled command: {command!r}")
 
