@@ -10,6 +10,7 @@ const router = useRouter()
 const siteName = route.params.name
 
 const site = ref(null)
+const httpPort = ref(8000)
 const installable = ref([])
 const registry = ref([])
 const loading = ref(true)
@@ -119,6 +120,7 @@ async function load() {
     if (!res.ok) throw new Error(`${res.status}`)
     const d = await res.json()
     site.value = d.site
+    httpPort.value = d.http_port ?? 8000
     installable.value = d.installable_apps
   } catch (e) {
     error.value = e.message
@@ -205,6 +207,9 @@ onMounted(() => { load(); loadRegistry() })
             <span v-if="site.db_host" class="flex items-center gap-1.5">
               <LucideServer class="h-3.5 w-3.5" />
               {{ site.db_host }}
+            </span>
+            <span class="flex items-center gap-1.5">
+              :{{ httpPort }}
             </span>
           </div>
         </div>

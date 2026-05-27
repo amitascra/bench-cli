@@ -38,9 +38,15 @@ def detail(name: str):
     except Exception:
         installable = []
 
+    from bench_cli.config.bench_config import BenchConfig
+    try:
+        http_port = BenchConfig.from_file(bench_root / "bench.toml").http_port
+    except Exception:
+        http_port = 8000
+
     site_dict = asdict(site)
     site_dict["site_config"] = _mask_password(site.site_config)
-    return jsonify({"site": site_dict, "installable_apps": installable})
+    return jsonify({"site": site_dict, "installable_apps": installable, "http_port": http_port})
 
 
 @sites_bp.route("/create", methods=["POST"])
