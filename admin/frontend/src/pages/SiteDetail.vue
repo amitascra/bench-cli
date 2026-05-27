@@ -29,6 +29,47 @@ const showDrop = ref(false)
 const showUninstall = ref(false)
 const uninstallTarget = ref('')
 
+const showEditConfig = ref(false)
+const editConfigText = ref('')
+const editConfigError = ref('')
+const editConfigLoading = ref(false)
+
+function openEditConfig() {
+  editConfigText.value = JSON.stringify(site.value.site_config, null, 2)
+  editConfigError.value = ''
+  showEditConfig.value = true
+}
+
+async function saveConfig() {
+  editConfigError.value = ''
+  let parsed
+  try {
+    parsed = JSON.parse(editConfigText.value)
+  } catch {
+    editConfigError.value = 'Invalid JSON — please fix the syntax before saving.'
+    return
+  }
+  editConfigLoading.value = true
+  try {
+    const res = await fetch(`/api/sites/${siteName}/config`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(parsed),
+    })
+    const d = await res.json()
+    if (d.ok) {
+      showEditConfig.value = false
+      await load()
+    } else {
+      editConfigError.value = d.error
+    }
+  } catch (e) {
+    editConfigError.value = e.message
+  } finally {
+    editConfigLoading.value = false
+  }
+}
+
 const activeTab = ref(0)
 const tabs = [
   { label: 'Apps' },
@@ -184,7 +225,10 @@ onMounted(() => { load(); loadRegistry() })
           <!-- Config -->
           <div v-else-if="tab.label === 'Config'" class="pt-4">
             <div class="rounded border bg-surface-gray-1 p-4">
-              <p class="mb-2 text-xs font-medium text-ink-gray-5">site_config.json</p>
+              <div class="mb-2 flex items-center justify-between">
+                <p class="text-xs font-medium text-ink-gray-5">site_config.json</p>
+                <Button variant="ghost" size="sm" @click="openEditConfig">Edit</Button>
+              </div>
               <pre class="overflow-x-auto font-mono text-sm text-ink-gray-8">{{ JSON.stringify(site.site_config, null, 2) }}</pre>
             </div>
           </div>
@@ -239,6 +283,25 @@ onMounted(() => { load(); loadRegistry() })
           <Button variant="ghost" @click="showDrop = false">Cancel</Button>
           <Button variant="solid" theme="red" :loading="actionLoading === 'drop'"
             @click="showDrop = false; doAction('drop')">Drop Site</Button>
+        </div>
+      </template>
+    </Dialog>
+
+    <!-- Edit Config dialog -->
+    <Dialog v-model="showEditConfig" :options="{ title: 'Edit site_config.json', size: 'lg' }">
+      <template #body-content>
+        <div @pointerdown.stop>
+          <textarea
+            v-model="editConfigText"
+            rows="20"
+            class="w-full rounded border bg-surface-gray-1 p-3 font-mono text-sm text-ink-gray-8 focus:outline-none focus:ring-1 focus:ring-gray-400"
+            spellcheck="false"
+          />
+          <ErrorMessage :message="editConfigError" class="mt-2" />
+          <div class="mt-4 flex justify-end gap-2">
+            <Button variant="ghost" @click="showEditConfig = false">Cancel</Button>
+            <Button variant="solid" :loading="editConfigLoading" @click="saveConfig">Save</Button>
+          </div>
         </div>
       </template>
     </Dialog>

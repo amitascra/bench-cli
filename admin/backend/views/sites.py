@@ -115,6 +115,32 @@ def uninstall_app(name: str):
     return jsonify({"ok": True, "task_id": task_id})
 
 
+@sites_bp.route("/<name>/config", methods=["PATCH"])
+def update_config(name: str):
+    bench_root = Path(current_app.config["BENCH_ROOT"])
+    config_path = bench_root / "sites" / name / "site_config.json"
+    if not config_path.exists():
+        return jsonify({"ok": False, "error": "site_config.json not found."}), 404
+
+    data = request.get_json(silent=True)
+    if data is None or not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "Invalid JSON body."}), 400
+
+    import json
+    current = json.loads(config_path.read_text())
+
+    # Preserve the real db_password if the masked sentinel came back
+    _MASK = "••••••••"
+    if data.get("db_password") == _MASK:
+        if "db_password" in current:
+            data["db_password"] = current["db_password"]
+        else:
+            del data["db_password"]
+
+    config_path.write_text(json.dumps(data, indent=1))
+    return jsonify({"ok": True})
+
+
 def _mask_password(config: dict) -> dict:
     masked = copy.deepcopy(config)
     if "db_password" in masked:
