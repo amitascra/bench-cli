@@ -29,6 +29,7 @@ _WHITELIST: dict[str, list[str]] = {
     "setup-nginx": [],
     "setup-production": [],
     "setup-letsencrypt": [],
+    "new-site-from-backup": ["name", "db_file"],
 }
 
 
@@ -110,7 +111,10 @@ class TaskRunner:
         if command == "uninstall-app":
             return [bench_bin, "frappe", "--site", args["site"], "uninstall-app", args["app"], "--yes", "--no-backup"]
         if command == "backup-site":
-            return [bench_bin, "frappe", "--site", args["site"], "backup"]
+            command = [bench_bin, "frappe", "--site", args["site"], "backup"]
+            if args.get("with_files"):
+                command += ["--with-files"]
+            return command
         if command == "build":
             cmd = [bench_bin, "frappe", "build"]
             if args.get("app"):
@@ -144,6 +148,15 @@ class TaskRunner:
             return [sys.executable, "-m", "admin.backend.tasks.jobs.setup_production_task", str(self._bench_root)]
         if command == "setup-letsencrypt":
             return [sys.executable, "-m", "admin.backend.tasks.jobs.setup_letsencrypt_task", str(self._bench_root)]
+        if command == "new-site-from-backup":
+            argv = [sys.executable, "-m", "admin.backend.tasks.jobs.new_site_from_backup_task", str(self._bench_root), args["name"], args["db_file"]]
+            if args.get("admin_password"):
+                argv += ["--admin-password", args["admin_password"]]
+            if args.get("public_files"):
+                argv += ["--public-files", args["public_files"]]
+            if args.get("private_files"):
+                argv += ["--private-files", args["private_files"]]
+            return argv
 
         raise ValueError(f"Unhandled command: {command!r}")
 

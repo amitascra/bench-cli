@@ -47,7 +47,7 @@ class CronManager:
         bench_bin = self._bench_root / "env" / "bin" / "bench"
         sites_dir = self._bench_root / "sites"
         log_file = self._bench_root / "logs" / f"backup-{site}.log"
-        return f"cd {sites_dir} && {bench_bin} frappe --site {site} backup >> {log_file} 2>&1"
+        return f"cd {sites_dir} && {bench_bin} frappe --site {site} backup --with-files >> {log_file} 2>&1"
 
     def _read_crontab(self) -> list[str]:
         result = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
