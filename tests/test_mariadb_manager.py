@@ -1,7 +1,6 @@
 """Tests for MariaDBManager.create_user() and _grant_host()."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
@@ -108,7 +107,7 @@ def test_create_user_includes_root_password() -> None:
                 assert "-ps3cr3t" in called_cmd
 
 
-# ── site.create() post-processing ────────────────────────────────────────────
+# ── site.create() with --mariadb-user-host-login-scope ──────────────────────
 
 
 def make_bench(tmp_path: Path) -> Bench:
@@ -126,44 +125,26 @@ def make_bench(tmp_path: Path) -> Bench:
     return Bench(config, tmp_path)
 
 
-def test_site_create_calls_create_user_after_frappe_new_site(tmp_path: Path) -> None:
+def test_site_create_passes_host_scope_for_tcp(tmp_path: Path) -> None:
     bench = make_bench(tmp_path)
     bench.create_directories()
-    site = Site(SiteConfig(name="site1.localhost", apps=["frappe"]), bench)
+    site = Site(SiteConfig(name="site1.localhost", apps=["frappe"], admin_password="admin"), bench)
 
-    site_cfg_data = {"db_name": "_abc123", "db_password": "dbpass"}
-    site.path.mkdir(parents=True, exist_ok=True)
-    (site.path / "site_config.json").write_text(json.dumps(site_cfg_data))
-
-    with patch("bench_cli.core.site.run_command"):
+    with patch("bench_cli.core.site.run_command") as mock_run:
         with patch("bench_cli.managers.mariadb_manager.MariaDBManager._detect_socket", return_value=""):
-            with patch("bench_cli.managers.mariadb_manager.MariaDBManager.create_user") as mock_create:
-                site.create()
-                mock_create.assert_called_once_with("_abc123", "dbpass", "_abc123")
+            site.create()
+            called_cmd = mock_run.call_args[0][0]
+            assert "--mariadb-user-host-login-scope" in called_cmd
+            assert "%" in called_cmd
 
 
-def test_site_create_skips_create_user_when_socket_used(tmp_path: Path) -> None:
+def test_site_create_skips_host_scope_for_socket(tmp_path: Path) -> None:
     bench = make_bench(tmp_path)
     bench.create_directories()
-    site = Site(SiteConfig(name="site1.localhost", apps=["frappe"]), bench)
+    site = Site(SiteConfig(name="site1.localhost", apps=["frappe"], admin_password="admin"), bench)
 
-    site.path.mkdir(parents=True, exist_ok=True)
-    (site.path / "site_config.json").write_text(json.dumps({"db_name": "_abc123", "db_password": "dbpass"}))
-
-    with patch("bench_cli.core.site.run_command"):
+    with patch("bench_cli.core.site.run_command") as mock_run:
         with patch("bench_cli.managers.mariadb_manager.MariaDBManager._detect_socket", return_value="/tmp/mysql.sock"):
-            with patch("bench_cli.managers.mariadb_manager.MariaDBManager.create_user") as mock_create:
-                site.create()
-                mock_create.assert_not_called()
-
-
-def test_site_create_skips_create_user_when_site_config_missing(tmp_path: Path) -> None:
-    bench = make_bench(tmp_path)
-    bench.create_directories()
-    site = Site(SiteConfig(name="site1.localhost", apps=["frappe"]), bench)
-
-    with patch("bench_cli.core.site.run_command"):
-        with patch("bench_cli.managers.mariadb_manager.MariaDBManager._detect_socket", return_value=""):
-            with patch("bench_cli.managers.mariadb_manager.MariaDBManager.create_user") as mock_create:
-                site.create()
-                mock_create.assert_not_called()
+            site.create()
+            called_cmd = mock_run.call_args[0][0]
+            assert "--mariadb-user-host-login-scope" not in called_cmd
